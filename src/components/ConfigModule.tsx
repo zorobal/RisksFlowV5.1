@@ -33,8 +33,10 @@ import {
   ArrowUp,
   ArrowDown,
   Edit,
-  GripVertical
+  GripVertical,
+  X
 } from 'lucide-react';
+import { getDescendantEntityIds } from '../utils/orgUtils';
 
 export function generateScalesForSize(size: number): {
   frequency: ScaleItem[];
@@ -264,6 +266,20 @@ export default function ConfigModule({
   const [newOrgPays, setNewOrgPays] = useState('');
   const [newOrgAdresse, setNewOrgAdresse] = useState('');
 
+  // Editing state for OrgEntity in Tree View
+  const [editingOrgEntity, setEditingOrgEntity] = useState<OrgEntity | null>(null);
+  const [editOrgName, setEditOrgName] = useState('');
+  const [editOrgCode, setEditOrgCode] = useState('');
+  const [editOrgType, setEditOrgType] = useState('');
+  const [editOrgParent, setEditOrgParent] = useState('');
+  const [editOrgSecondary, setEditOrgSecondary] = useState('');
+  const [editOrgIsSuccursale, setEditOrgIsSuccursale] = useState(false);
+  const [editOrgSousOrgMode, setEditOrgSousOrgMode] = useState<'heritage' | 'propre'>('heritage');
+  const [editOrgVille, setEditOrgVille] = useState('');
+  const [editOrgPays, setEditOrgPays] = useState('');
+  const [editOrgAdresse, setEditOrgAdresse] = useState('');
+  const [editOrgStatut, setEditOrgStatut] = useState<'Actif' | 'Inactif' | 'Fusionné' | 'Archivé'>('Actif');
+
   // --- Unit Types Administration ---
   const [draggedUnitTypeIndex, setDraggedUnitTypeIndex] = useState<number | null>(null);
 
@@ -475,10 +491,15 @@ export default function ConfigModule({
   // Scales Sub-tab toggle
   const [activeScaleType, setActiveScaleType] = useState<'freq' | 'imp' | 'ctrl'>('freq');
 
-  // Category Inputs
+  // Category Inputs & Edit State
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#22c55e');
   const [newCatDesc, setNewCatDesc] = useState('');
+
+  const [editingCategory, setEditingCategory] = useState<RiskCategory | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatColor, setEditCatColor] = useState('#22c55e');
+  const [editCatDesc, setEditCatDesc] = useState('');
 
   // Formula Inputs
   const [selectedFormulaId, setSelectedFormulaId] = useState(tenantConfig.formula.id);
@@ -695,7 +716,7 @@ export default function ConfigModule({
   };
 
   const handleRemoveOrgNode = (id: string) => {
-    const hasChildren = tenantConfig.entities.some(e => e.parentId === id);
+    const hasChildren = tenantConfig.entities.some(e => e.parentId === id && e.statut !== 'Archivé');
     if (hasChildren) {
       alert("⚠️ Cette unité possède des sous-composants hiérarchiques. Veuillez d'abord supprimer ou réassigner ces sous-unités.");
       return;
@@ -707,6 +728,56 @@ export default function ConfigModule({
     };
     onUpdateTenantConfig(updated);
     onAddLog('Config Structure', `Archivage / Soft Delete de l'unité organisationnelle [ID: ${id}]`);
+  };
+
+  const handleOpenEditOrgModal = (entity: OrgEntity) => {
+    setEditingOrgEntity(entity);
+    setEditOrgName(entity.name);
+    setEditOrgCode(entity.code || '');
+    setEditOrgType(entity.type);
+    setEditOrgParent(entity.parentId || '');
+    setEditOrgSecondary(entity.rattachementsSecondaires?.[0] || '');
+    setEditOrgIsSuccursale(entity.est_succursale || false);
+    setEditOrgSousOrgMode(entity.sousOrganigrammeMode || 'heritage');
+    setEditOrgVille(entity.ville || '');
+    setEditOrgPays(entity.pays || '');
+    setEditOrgAdresse(entity.adresse || '');
+    setEditOrgStatut(entity.statut || 'Actif');
+  };
+
+  const handleSaveEditOrgNode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrgEntity || !editOrgName.trim()) return;
+
+    const codeShort = editOrgCode.trim() || editOrgName.toUpperCase().substring(0, 5).replace(/ /g, '-');
+
+    const updatedEntities = tenantConfig.entities.map(e => {
+      if (e.id === editingOrgEntity.id) {
+        return {
+          ...e,
+          name: editOrgName.trim(),
+          code: codeShort,
+          type: editOrgType,
+          parentId: editOrgParent || undefined,
+          statut: editOrgStatut,
+          rattachementsSecondaires: editOrgSecondary ? [editOrgSecondary] : [],
+          est_succursale: editOrgIsSuccursale,
+          sousOrganigrammeMode: editOrgIsSuccursale ? editOrgSousOrgMode : undefined,
+          ville: editOrgVille.trim() || undefined,
+          pays: editOrgPays.trim() || undefined,
+          adresse: editOrgAdresse.trim() || undefined
+        };
+      }
+      return e;
+    });
+
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      entities: updatedEntities
+    });
+
+    onAddLog('Config Structure', `Mise à jour de l'unité organisationnelle "${editOrgName.trim()}" [Code: ${codeShort}, Type: ${editOrgType}]`);
+    setEditingOrgEntity(null);
   };
 
   // --- Functions & Assignments ---
@@ -858,6 +929,38 @@ export default function ConfigModule({
     });
   };
 
+  const handleOpenEditCatModal = (cat: RiskCategory) => {
+    setEditingCategory(cat);
+    setEditCatName(cat.name);
+    setEditCatColor(cat.color || '#22c55e');
+    setEditCatDesc(cat.description || '');
+  };
+
+  const handleSaveEditCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editCatName.trim()) return;
+
+    const updatedCategories = tenantConfig.categories.map(c => {
+      if (c.id === editingCategory.id) {
+        return {
+          ...c,
+          name: editCatName.trim(),
+          color: editCatColor,
+          description: editCatDesc.trim()
+        };
+      }
+      return c;
+    });
+
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      categories: updatedCategories
+    });
+
+    onAddLog('Config Catégories', `Mise à jour de la catégorie de risque "${editCatName.trim()}"`);
+    setEditingCategory(null);
+  };
+
   // --- Formulas Configuration ---
   const handleFormulaUpdate = (formId: string) => {
     setSelectedFormulaId(formId);
@@ -954,13 +1057,24 @@ export default function ConfigModule({
                 )}
               </div>
 
-              <button
-                onClick={() => handleRemoveOrgNode(node.id)}
-                className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 cursor-pointer self-end sm:self-auto"
-                title="Supprimer / Archiver"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditOrgModal(node)}
+                  className="p-1 text-slate-500 hover:text-indigo-600 rounded hover:bg-indigo-50 cursor-pointer transition"
+                  title="Modifier cette unité (Libellé, Code, Type, Rattachement Matriciel...)"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveOrgNode(node.id)}
+                  className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 cursor-pointer transition"
+                  title="Supprimer / Archiver"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
             {renderIndentedOrg(node.id, depth + 1)}
           </div>
@@ -3140,58 +3254,88 @@ export default function ConfigModule({
                 <p className="text-slate-400 text-[10.5px]">Améliorez la classification de vos risques en créant des thématiques sur-mesure.</p>
               </div>
 
-              <form onSubmit={handleAddCategory} className="p-4 bg-slate-50 rounded-xl border border-slate-150 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase">Intitulé de la catégorie</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="Ex. Risques Climatiques..."
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    className="w-full bg-white border border-slate-255 rounded p-1.5 text-xs text-slate-900 font-bold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase">Couleur Thématique</label>
-                  <div className="flex items-center gap-1.5">
+              <form onSubmit={handleAddCategory} className="p-4 bg-slate-50 rounded-xl border border-slate-150 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="space-y-1 sm:col-span-5">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase block">Intitulé de la catégorie</label>
                     <input 
-                      type="color" 
-                      value={newCatColor}
-                      onChange={(e) => setNewCatColor(e.target.value)}
-                      className="w-8 h-8 rounded shrink-0 cursor-pointer border border-slate-200"
+                      type="text" 
+                      required 
+                      placeholder="Ex. Risques Climatiques, Cybersécurité..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-indigo-500"
                     />
-                    <span className="font-mono text-[10px] text-slate-450 uppercase">{newCatColor}</span>
+                  </div>
+                  <div className="space-y-1 sm:col-span-4">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase block">Couleur Thématique</label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={newCatColor}
+                        onChange={(e) => setNewCatColor(e.target.value)}
+                        className="w-8 h-8 rounded shrink-0 cursor-pointer border border-slate-200"
+                      />
+                      <span className="font-mono text-[10px] text-slate-500 uppercase">{newCatColor}</span>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-indigo-600 text-white font-bold rounded shadow hover:bg-indigo-700 text-xs cursor-pointer text-center transition"
+                    >
+                      Ajouter Thématique
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="submit"
-                  className="py-2 bg-indigo-600 text-white font-bold rounded shadow hover:bg-indigo-700 text-xs cursor-pointer text-center"
-                >
-                  Ajouter Thématique
-                </button>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Description de la Catégorie</label>
+                  <input
+                    type="text"
+                    placeholder="Ex. Description détaillée des risques associés à cette thématique..."
+                    value={newCatDesc}
+                    onChange={(e) => setNewCatDesc(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
               </form>
 
               {/* Categories list */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-80 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-96 overflow-y-auto">
                 {tenantConfig.categories.map((cat) => (
                   <div 
                     key={cat.id} 
-                    className="p-3 bg-white hover:bg-slate-50 border border-slate-150 rounded-lg flex items-center justify-between"
+                    className="p-3 bg-white hover:bg-slate-50/80 border border-slate-200 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="w-4 h-4 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: cat.color }}></span>
-                      <div>
-                        <strong className="text-slate-800 text-[11px] block leading-none">{cat.name}</strong>
+                    <div className="flex items-start gap-3">
+                      <span className="w-4 h-4 rounded-full shrink-0 shadow-xs mt-0.5" style={{ backgroundColor: cat.color }}></span>
+                      <div className="space-y-0.5">
+                        <strong className="text-slate-900 text-xs font-bold block">{cat.name}</strong>
+                        <p className="text-[10.5px] text-slate-500 leading-snug">
+                          {cat.description || <span className="italic text-slate-400">Aucune description renseignée</span>}
+                        </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleRemoveCategory(cat.id)}
-                      className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 cursor-pointer"
-                      title="Retirer la catégorie"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditCatModal(cat)}
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                        title="Modifier la catégorie (Libellé, Couleur, Description)"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCategory(cat.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                        title="Retirer la catégorie"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -3350,6 +3494,268 @@ export default function ConfigModule({
           )}
         </div>
       </div>
+
+      {/* MODAL EDIT ORG ENTITY (CRUD) */}
+      {editingOrgEntity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden space-y-4 p-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <Edit className="w-4 h-4 text-indigo-600" />
+                Modifier l'Unité Organisationnelle ({editingOrgEntity.code})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingOrgEntity(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditOrgNode} className="space-y-4 text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Libellé Unité</label>
+                  <input
+                    type="text"
+                    required
+                    value={editOrgName}
+                    onChange={(e) => setEditOrgName(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Code Court</label>
+                  <input
+                    type="text"
+                    required
+                    value={editOrgCode}
+                    onChange={(e) => setEditOrgCode(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Type d'Unité</label>
+                  <select
+                    value={editOrgType}
+                    onChange={(e) => setEditOrgType(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    {currentUnitTypes.map(ut => (
+                      <option key={ut.id} value={ut.name}>
+                        {ut.icon || '📁'} {ut.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Unité Parente</label>
+                  <select
+                    value={editOrgParent}
+                    onChange={(e) => setEditOrgParent(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">-- Racine (Groupe) --</option>
+                    {tenantConfig.entities
+                      .filter(e => e.id !== editingOrgEntity.id && e.statut !== 'Archivé')
+                      .map(e => (
+                        <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Rattachement Matriciel (Rapport Secondaire)</label>
+                  <select
+                    value={editOrgSecondary}
+                    onChange={(e) => setEditOrgSecondary(e.target.value)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 font-semibold"
+                  >
+                    <option value="">Aucun (Hiérarchique simple)</option>
+                    {tenantConfig.entities
+                      .filter(e => e.id !== editingOrgEntity.id && e.statut !== 'Archivé')
+                      .map(e => (
+                        <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase block">Statut de l'Unité</label>
+                  <select
+                    value={editOrgStatut}
+                    onChange={(e) => setEditOrgStatut(e.target.value as any)}
+                    className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Actif">Actif (Rattachable aux risques, personnes et processus)</option>
+                    <option value="Inactif">Inactif (Désactivé / Bloqué)</option>
+                    <option value="Fusionné">Fusionné (Conservé pour historique)</option>
+                    <option value="Archivé">Archivé (Masqué)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Succursale section inside edit */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input 
+                    type="checkbox"
+                    checked={editOrgIsSuccursale}
+                    onChange={(e) => setEditOrgIsSuccursale(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-800">
+                    Marquer comme Succursale contractuelle
+                  </span>
+                </label>
+
+                {editOrgIsSuccursale && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200 text-xs">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase block">Mode Organigramme</label>
+                      <select
+                        value={editOrgSousOrgMode}
+                        onChange={(e) => setEditOrgSousOrgMode(e.target.value as any)}
+                        className="w-full bg-white border border-slate-250 rounded p-1.5 text-slate-700"
+                      >
+                        <option value="heritage">🔗 Hériter de la maison mère</option>
+                        <option value="propre">💼 Sous-organigramme propre</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase block">Ville</label>
+                      <input 
+                        type="text"
+                        placeholder="Ville..."
+                        value={editOrgVille}
+                        onChange={(e) => setEditOrgVille(e.target.value)}
+                        className="w-full bg-white border border-slate-250 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase block">Pays</label>
+                      <input 
+                        type="text"
+                        placeholder="Pays..."
+                        value={editOrgPays}
+                        onChange={(e) => setEditOrgPays(e.target.value)}
+                        className="w-full bg-white border border-slate-250 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+
+                    <div className="space-y-1 sm:col-span-3">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase block">Adresse complète</label>
+                      <input 
+                        type="text"
+                        placeholder="Adresse..."
+                        value={editOrgAdresse}
+                        onChange={(e) => setEditOrgAdresse(e.target.value)}
+                        className="w-full bg-white border border-slate-250 rounded p-1.5 text-slate-800"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrgEntity(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs cursor-pointer transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow-md transition"
+                >
+                  Enregistrer les modifications
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT CATEGORY (CRUD) */}
+      {editingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden space-y-4 p-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <Edit className="w-4 h-4 text-indigo-600" />
+                Modifier la Catégorie de Risque
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingCategory(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCategory} className="space-y-4 text-left">
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase block">Intitulé de la catégorie</label>
+                <input
+                  type="text"
+                  required
+                  value={editCatName}
+                  onChange={(e) => setEditCatName(e.target.value)}
+                  className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase block">Couleur Thématique</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={editCatColor}
+                    onChange={(e) => setEditCatColor(e.target.value)}
+                    className="w-9 h-9 rounded cursor-pointer border border-slate-200 shrink-0"
+                  />
+                  <span className="font-mono text-xs text-slate-600 uppercase font-bold">{editCatColor}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase block">Description de la Catégorie</label>
+                <textarea
+                  rows={3}
+                  value={editCatDesc}
+                  onChange={(e) => setEditCatDesc(e.target.value)}
+                  placeholder="Saisissez la description de la catégorie..."
+                  className="w-full bg-white border border-slate-250 rounded p-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs cursor-pointer transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow-md transition"
+                >
+                  Enregistrer les modifications
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
