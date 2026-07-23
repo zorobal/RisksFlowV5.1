@@ -33,7 +33,8 @@ import {
   Building,
   CreditCard,
   UploadCloud,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Camera
 } from 'lucide-react';
 import { User, TenantConfig, AuditLog, Role, SessionExercice, Licence, EntrepriseCliente } from '../types';
 
@@ -58,6 +59,13 @@ interface AdminModuleProps {
   activeEntreprise?: EntrepriseCliente;
   onUpdateEntreprise?: (entreprise: EntrepriseCliente) => void;
 }
+
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 export default function AdminModule({
   users,
@@ -359,6 +367,8 @@ export default function AdminModule({
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserEntityId, setNewUserEntityId] = useState('');
+  const [newUserAvatar, setNewUserAvatar] = useState<string>('');
+  const [editUserAvatar, setEditUserAvatar] = useState<string>('');
   const [selectedRoles, setSelectedRoles] = useState<Role[]>(['Analyste']);
   const [userError, setUserError] = useState('');
 
@@ -387,12 +397,13 @@ export default function AdminModule({
       allowedModules: selectedRoles.includes('Administrateur') || selectedRoles.includes('SuperAdmin')
         ? ['dashboard', 'risks', 'evaluation', 'heatmap', 'actions', 'audit', 'compliance', 'config', 'admin', 'reporting']
         : ['dashboard', 'risks', 'evaluation', 'heatmap', 'actions', 'audit', 'compliance', 'reporting'],
-      avatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=80&fit=crop&q=80`
+      avatar: newUserAvatar || undefined
     });
 
     setNewUserName('');
     setNewUserEmail('');
     setNewUserEntityId('');
+    setNewUserAvatar('');
     setSelectedRoles(['Analyste']);
     setUserError('');
   };
@@ -406,6 +417,7 @@ export default function AdminModule({
     setEditUserIsActive(u.isActive !== false);
     setEditUserAllowedModules(u.allowedModules || ['dashboard', 'risks', 'evaluation', 'heatmap', 'actions', 'audit', 'compliance', 'reporting']);
     setEditUserEntityId(u.entityId || '');
+    setEditUserAvatar(u.avatar || '');
   };
 
   const saveUserEdit = () => {
@@ -428,7 +440,8 @@ export default function AdminModule({
       roles: [editUserRole],
       isActive: editUserIsActive,
       allowedModules: editUserAllowedModules,
-      entityId: editUserEntityId || undefined
+      entityId: editUserEntityId || undefined,
+      avatar: editUserAvatar || undefined
     });
     setEditingUser(null);
   };
@@ -574,7 +587,7 @@ export default function AdminModule({
               )}
 
               {/* Creator Form */}
-              <form onSubmit={handleAddUserSubmit} className="p-4 bg-slate-50 rounded-xl border border-slate-150 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+              <form onSubmit={handleAddUserSubmit} className="p-4 bg-slate-50 rounded-xl border border-slate-150 grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-400 font-bold uppercase">Nom complet</label>
                   <input 
@@ -609,6 +622,44 @@ export default function AdminModule({
                       <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
                     ))}
                   </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Photo (Optionnelle)</label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 font-semibold cursor-pointer flex items-center justify-between">
+                      <span className="truncate text-[10px]">{newUserAvatar ? 'Photo choisie' : 'Parcourir...'}</span>
+                      <Camera className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 2 * 1024 * 1024) {
+                            alert("La photo ne doit pas dépasser 2 Mo.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            if (evt.target?.result) setNewUserAvatar(evt.target.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {newUserAvatar && (
+                      <button 
+                        type="button" 
+                        onClick={() => setNewUserAvatar('')} 
+                        className="text-red-500 text-xs font-bold px-1 hover:underline"
+                        title="Supprimer la photo"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1 bg-slate-50 p-3 rounded border border-slate-200">
                   <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Rôles / Privilèges (Multi-sélection)</label>
@@ -672,7 +723,13 @@ export default function AdminModule({
                       {users.map((u) => (
                         <tr key={u.id} className="hover:bg-slate-50">
                           <td className="py-2 px-4 flex items-center gap-2">
-                            <img src={u.avatar} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                            {u.avatar ? (
+                              <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[9px] shrink-0">
+                                {getInitials(u.name)}
+                              </div>
+                            )}
                             <strong className="text-slate-800 text-[11px]">{u.name}</strong>
                           </td>
                           <td className="py-2 px-4 font-mono text-slate-500">{u.email}</td>
@@ -863,6 +920,55 @@ export default function AdminModule({
                               Suspendu
                             </span>
                           </label>
+                        </div>
+                      </div>
+
+                      {/* Photo de profil */}
+                      <div className="col-span-2 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <label className="text-[10px] text-slate-500 font-bold uppercase block">Photo de profil</label>
+                        <div className="flex items-center gap-3 pt-1">
+                          {editUserAvatar ? (
+                            <img src={editUserAvatar} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-300" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                              {getInitials(editUserName || editingUser.name)}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <label className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 rounded text-[11px] font-semibold text-slate-700 cursor-pointer flex items-center gap-1 shadow-sm">
+                              <Camera className="w-3 h-3 text-indigo-600" />
+                              <span>{editUserAvatar ? 'Changer photo' : 'Importer photo'}</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  if (file.size > 2 * 1024 * 1024) {
+                                    alert("La photo ne doit pas dépasser 2 Mo.");
+                                    return;
+                                  }
+                                  const reader = new FileReader();
+                                  reader.onload = (evt) => {
+                                    if (evt.target?.result) setEditUserAvatar(evt.target.result as string);
+                                  };
+                                  reader.readAsDataURL(file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            {editUserAvatar && (
+                              <button
+                                type="button"
+                                onClick={() => setEditUserAvatar('')}
+                                className="px-2.5 py-1 bg-red-50 border border-red-200 hover:bg-red-100 rounded text-[11px] font-semibold text-red-600 transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Supprimer</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 

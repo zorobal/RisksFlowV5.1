@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Briefcase, 
   Settings, 
@@ -21,7 +21,10 @@ import {
   Activity,
   LogOut,
   ClipboardList,
-  Award
+  Award,
+  Camera,
+  Trash2,
+  User as UserIcon
 } from 'lucide-react';
 import { TenantConfig, User } from '../types';
 
@@ -41,6 +44,13 @@ interface OdooNavbarProps {
   onToggleSuperAdminMode: (active: boolean) => void;
   onLogout?: () => void;
 }
+
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 export default function OdooNavbar({
   tenants,
@@ -69,6 +79,42 @@ export default function OdooNavbar({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("La photo de profil ne doit pas dépasser 2 Mo.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result as string;
+      if (dataUrl) {
+        const updatedUser = { ...currentUser, avatar: dataUrl };
+        setCurrentUser(updatedUser);
+        if (onUpdateUsers) {
+          onUpdateUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, avatar: dataUrl } : u));
+        }
+        onAddLog('Profil', `Mise à jour de la photo de profil pour ${currentUser.name}`);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = () => {
+    const updatedUser = { ...currentUser, avatar: undefined };
+    setCurrentUser(updatedUser);
+    if (onUpdateUsers) {
+      onUpdateUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, avatar: undefined } : u));
+    }
+    onAddLog('Profil', `Suppression de la photo de profil pour ${currentUser.name}`);
+  };
 
   const activeTenant = tenants.find(t => t.id === activeTenantId) || tenants[0];
 
@@ -255,16 +301,29 @@ export default function OdooNavbar({
 
           {/* Current User Role Identity */}
           <div className="relative">
+            <input 
+              type="file" 
+              ref={avatarInputRef} 
+              accept="image/*" 
+              onChange={handleAvatarFileChange} 
+              className="hidden" 
+            />
             <button
               id="user-profile-btn"
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-2 p-1.5 rounded text-left hover:bg-slate-800 transition-colors focus:outline-none cursor-pointer"
             >
-              <img 
-                src={currentUser.avatar || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&fit=crop&q=80"} 
-                alt={currentUser.name} 
-                className="w-7 h-7 rounded-full object-cover border border-slate-700" 
-              />
+              {currentUser.avatar ? (
+                <img 
+                  src={currentUser.avatar} 
+                  alt={currentUser.name} 
+                  className="w-7 h-7 rounded-full object-cover border border-slate-700" 
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] border border-slate-700 shrink-0">
+                  {getInitials(currentUser.name)}
+                </div>
+              )}
               <div className="hidden md:block text-left">
                 <div className="flex items-center space-x-1">
                   <p className="text-[11px] font-semibold leading-none text-slate-200">{currentUser.name}</p>
@@ -288,6 +347,30 @@ export default function OdooNavbar({
 
                   {/* Actions */}
                   <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        avatarInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-1.5 hover:bg-slate-800 text-left font-medium text-slate-300 text-[11px] transition-colors"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{currentUser.avatar ? 'Changer ma photo de profil' : 'Ajouter ma photo de profil'}</span>
+                    </button>
+
+                    {currentUser.avatar && (
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          handleRemoveAvatar();
+                        }}
+                        className="w-full flex items-center space-x-2 px-3 py-1.5 hover:bg-slate-800 text-left font-medium text-red-400 text-[11px] transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Supprimer ma photo</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         setShowUserMenu(false);

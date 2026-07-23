@@ -26,11 +26,11 @@ import {
 
 // Preset Users
 export const PRESET_USERS: User[] = [
-  { id: 'u1', name: 'Alain-Patrick Nkoumou', email: 'alainpatricknkoumou@gmail.com', role: 'Risk Manager', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&q=80', password: 'vito' },
-  { id: 'u2', name: 'Marie-Thérèse Atangana', email: 'mt.atangana@enterprise.com', role: 'Direction', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&fit=crop&q=80', password: 'vito' },
-  { id: 'u3', name: 'Jean-Pierre Ndzana', email: 'jp.ndzana@enterprise.com', role: 'Responsable', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&q=80', password: 'vito' },
-  { id: 'u4', name: 'Dieudonné Mbarga', email: 'd.mbarga@enterprise.com', role: 'Analyste', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop&q=80', password: 'vito' },
-  { id: 'u5', name: 'SuperAdmin Kouam', email: 'admin@plateforme.com', role: 'SuperAdmin', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&fit=crop&q=80', password: 'vito' },
+  { id: 'u1', name: 'Alain-Patrick Nkoumou', email: 'alainpatricknkoumou@gmail.com', role: 'Risk Manager', password: 'vito' },
+  { id: 'u2', name: 'Marie-Thérèse Atangana', email: 'mt.atangana@enterprise.com', role: 'Direction', password: 'vito' },
+  { id: 'u3', name: 'Jean-Pierre Ndzana', email: 'jp.ndzana@enterprise.com', role: 'Responsable', password: 'vito' },
+  { id: 'u4', name: 'Dieudonné Mbarga', email: 'd.mbarga@enterprise.com', role: 'Analyste', password: 'vito' },
+  { id: 'u5', name: 'SuperAdmin Kouam', email: 'admin@plateforme.com', role: 'SuperAdmin', password: 'vito' },
 ];
 
 // Preset Tenant 1: Sogesti S.A. (follows exactly the IFACI 2013 Annex 1)

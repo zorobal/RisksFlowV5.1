@@ -90,7 +90,6 @@ export default function LoginModule({ users, onLogin, onEnterDemo }: LoginModule
               name: 'SuperAdmin Kouam',
               email: 'admin@plateforme.com',
               role: 'SuperAdmin',
-              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&fit=crop&q=80',
               password: 'vito'
             });
           }
