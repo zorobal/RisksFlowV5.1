@@ -1,0 +1,8 @@
+{
+  "name": "RisksFlow V5",
+  "description": "Application web multi-entreprises d\u0027identification, de calcul, de cartographie et de suivi des plans d\u0027actions de risques conformes au modèle IFACI 2013.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
