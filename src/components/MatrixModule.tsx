@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { Risk, TenantConfig, ActionPlan } from '../types';
+import OrgEntityTreeFilter from './OrgEntityTreeFilter';
+import { getDescendantEntityIds } from '../utils/orgUtils';
 
 interface MatrixModuleProps {
   risks: Risk[];
@@ -60,9 +62,13 @@ export default function MatrixModule({
   const registerTableRef = useRef<HTMLDivElement>(null);
   const printRegisterTableRef = useRef<HTMLDivElement>(null);
 
+  const selectedEntityDescendants = entityFilter !== 'all'
+    ? getDescendantEntityIds(tenantConfig.entities, entityFilter)
+    : [];
+
   // Filter risk base list
   const filteredRisks = risks.filter(r => {
-    const matchEntity = entityFilter === 'all' || r.entityId === entityFilter;
+    const matchEntity = entityFilter === 'all' || selectedEntityDescendants.includes(r.entityId);
     const matchCat = categoryFilter === 'all' || r.categoryId === categoryFilter;
     const matchSearch = searchQuery.trim() === '' || 
       r.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -708,19 +714,16 @@ export default function MatrixModule({
           />
         </div>
 
-        {/* Entity Selector */}
-        <div className="md:col-span-3 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-          <select 
-            value={entityFilter}
-            onChange={(e) => { setEntityFilter(e.target.value); setSelectedCell(null); }}
-            className="w-full bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded px-2 py-1.5 text-xs"
-          >
-            <option value="all">Toutes les entités / directions</option>
-            {tenantConfig.entities.map(e => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
+        {/* Hierarchical Entity Selector */}
+        <div className="md:col-span-3">
+          <OrgEntityTreeFilter
+            entities={tenantConfig.entities}
+            selectedEntityId={entityFilter}
+            onSelectEntity={(id) => { setEntityFilter(id); setSelectedCell(null); }}
+            label=""
+            includeAllOption={true}
+            allOptionLabel="Toutes les entités / périmètre global"
+          />
         </div>
 
         {/* Category Selector */}

@@ -24,6 +24,8 @@ import {
   Boxes
 } from 'lucide-react';
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
+import OrgEntityTreeFilter from './OrgEntityTreeFilter';
+import { getDescendantEntityIds } from '../utils/orgUtils';
 
 interface RiskMappingModuleProps {
   risks: Risk[];
@@ -96,6 +98,10 @@ export default function RiskMappingModule({
   const controlScales = tenantConfig?.scales?.control || [];
   const formulaExpr = tenantConfig?.formula?.expression || '(P * I) * M';
 
+  const selectedEntityDescendants = selectedEntity !== 'all'
+    ? getDescendantEntityIds(entities, selectedEntity)
+    : [];
+
   // Filter risks
   const filteredRisks = safeRisks.filter(r => {
     if (!r) return false;
@@ -103,7 +109,7 @@ export default function RiskMappingModule({
                         (r.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                         (r.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchCat = selectedCategory === 'all' || r.categoryId === selectedCategory;
-    const matchEntity = selectedEntity === 'all' || r.entityId === selectedEntity;
+    const matchEntity = selectedEntity === 'all' || selectedEntityDescendants.includes(r.entityId);
     const matchStatus = selectedStatus === 'all' || r.statusId === selectedStatus;
     
     return matchSearch && matchCat && matchEntity && matchStatus;
@@ -340,17 +346,14 @@ export default function RiskMappingModule({
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-slate-400 font-bold block h-4">Département d'assiette</label>
-            <select
-              value={selectedEntity}
-              onChange={(e) => setSelectedEntity(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded px-2 py-1 w-full"
-            >
-              <option value="all">Tous</option>
-              {entities.map(e => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
+            <OrgEntityTreeFilter
+              entities={entities}
+              selectedEntityId={selectedEntity}
+              onSelectEntity={(id) => setSelectedEntity(id)}
+              label="Périmètre / Unité d'assiette"
+              includeAllOption={true}
+              allOptionLabel="Tous les périmètres"
+            />
           </div>
           {(isSuperAdminMode || tenantConfig?.showWorkflowFilter) && (
             <div>

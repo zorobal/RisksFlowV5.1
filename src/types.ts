@@ -22,7 +22,7 @@ export interface User {
 export interface OrgEntity {
   id: string;
   name: string;
-  type: 'Entreprise' | 'Filiale' | 'Département' | 'Division' | 'Direction' | 'Service' | 'Site';
+  type: string;
   parentId?: string; // For tree structure
   code?: string; // Section 2.1.1
   statut?: 'Actif' | 'Inactif' | 'Fusionné' | 'Archivé';
@@ -173,6 +173,15 @@ export interface ComplianceIncident {
   tenantId?: string;
 }
 
+export interface UnitTypeConfig {
+  id: string;
+  name: string; // e.g. "Direction Générale", "Filiale", "Succursale", "Direction", "Département", "Division", "Service", "Bureau", "Cellule"
+  level: number; // 1 (Highest e.g. Direction Générale / Siège), 2, 3, 4, 5...
+  description?: string;
+  code?: string;
+  icon?: string;
+}
+
 export interface RiskCategory {
   id: string;
   name: string;
@@ -190,9 +199,12 @@ export interface ScaleItem {
 export interface FormulaConfig {
   id: string;
   name: string;
-  expression: string; // e.g. "P * I * M" or "P * I" or "(P * I) * M"
+  expression: string; // e.g. "F * I * M" or "(F * I) - M" or "P * I"
   variables: { name: string; label: string; min: number; max: number }[];
   description: string;
+  formulaType?: 'IFACI_MULTIPLICATIVE' | 'AERO_SUBTRACTIVE' | 'DIVISIONAL' | 'GROSS_ONLY' | 'MULTIPLICATIVE' | 'SUBTRACTIVE' | 'BRUT_ONLY' | string;
+  ratingMode?: 'FREQUENCY_IMPACT' | 'PROBABILITY_IMPACT' | 'FREQ_IMP' | 'PROB_IMP' | string;
+  netFormulaType?: 'MULTIPLICATIVE' | 'SUBTRACTIVE' | 'DIVISIONAL' | 'BRUT_ONLY' | 'IFACI_MULTIPLICATIVE' | 'AERO_SUBTRACTIVE' | 'GROSS_ONLY' | 'DIRECT_BRUT' | string;
 }
 
 export interface MatrixThreshold {
@@ -214,11 +226,12 @@ export interface TenantConfig {
     control: ScaleItem[];
   };
   formula: FormulaConfig;
-  matrixSize: number; // e.g. 4 for 4x4 or 5 for 5x5
+  matrixSize: number; // e.g. 3 for 3x3, 4 for 4x4, 5 for 5x5, 6 for 6x6
   matrixThresholds: MatrixThreshold[];
   workflowSteps: { id: string; name: string; color: string; order: number }[];
   categories: RiskCategory[];
   entities: OrgEntity[];
+  unitTypes?: UnitTypeConfig[];
   showWorkflowFilter?: boolean;
 }
 

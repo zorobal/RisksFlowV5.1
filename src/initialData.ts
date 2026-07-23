@@ -39,6 +39,16 @@ export const SOGESTI_CONFIG: TenantConfig = {
   companyName: 'Sogesti Cameroun S.A.',
   logoUrl: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80',
   matrixSize: 4, // 4x4 for P * I and 4x4 for Control
+  unitTypes: [
+    { id: 'ut_1', name: 'Direction Générale / Siège', level: 1, description: 'Organe de gouvernance suprême de l\'entreprise', code: 'DG' },
+    { id: 'ut_2', name: 'Filiale / Succursale', level: 2, description: 'Unité juridique ou entité décentralisée majeure', code: 'FIL' },
+    { id: 'ut_3', name: 'Direction', level: 3, description: 'Direction opérationnelle, métier ou fonctionnelle', code: 'DIR' },
+    { id: 'ut_4', name: 'Département', level: 4, description: 'Subdivision d\'une Direction', code: 'DEP' },
+    { id: 'ut_5', name: 'Division', level: 5, description: 'Division spécifique ou pôle d\'activité', code: 'DIV' },
+    { id: 'ut_6', name: 'Service', level: 6, description: 'Service opérationnel de proximité', code: 'SRV' },
+    { id: 'ut_7', name: 'Bureau / Cellule', level: 7, description: 'Micro-unité spécialisée, équipe ou atelier', code: 'BUR' },
+    { id: 'ut_8', name: 'Site / Usine', level: 8, description: 'Implantation physique ou site logistique', code: 'SITE' }
+  ],
   scales: {
     frequency: [
       { value: 1, label: 'Exceptionnel', description: 'Occurrence quasi nulle (<1%) sur 2 ans' },
@@ -62,13 +72,16 @@ export const SOGESTI_CONFIG: TenantConfig = {
   formula: {
     id: 'f1',
     name: 'Formule IFACI Standard',
-    expression: 'P * I * M', // Frequency * Impact * Maîtrise
+    expression: 'F * I * M', // Frequency * Impact * Maîtrise
     variables: [
-      { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 4 },
+      { name: 'F', label: 'Probabilité/Fréquence', min: 1, max: 4 },
       { name: 'I', label: 'Impact', min: 1, max: 4 },
       { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 4 },
     ],
-    description: 'Calcul par produit simple du score brut (P x I) puis risque net (Brut x Maîtrise). Échelle de 1 à 64.',
+    description: 'Calcul par produit simple du score brut (F x I) puis risque net (Brut x Maîtrise). Échelle de 1 à 64.',
+    formulaType: 'IFACI_MULTIPLICATIVE',
+    ratingMode: 'FREQUENCY_IMPACT',
+    netFormulaType: 'MULTIPLICATIVE'
   },
   matrixThresholds: [
     { label: 'Risque faible', minScore: 0, maxScore: 6, color: 'bg-green-100 text-green-800 border-green-200', textColor: '#15803d', description: 'L\'impact sur l\'atteinte des objectifs n\'est pas préoccupant, le risque est sous contrôle.' },
@@ -90,14 +103,18 @@ export const SOGESTI_CONFIG: TenantConfig = {
     { id: 'cat_human', name: 'Risques Humains & RH', color: '#ec4899', description: 'Fuite des talents, grèves prolongées, doutes managériaux.' },
   ],
   entities: [
-    { id: 'e1', name: 'Direction Générale (Yaoundé)', type: 'Direction' },
-    { id: 'e1_1', name: 'Département Finance & Comptabilité', type: 'Département', parentId: 'e1' },
-    { id: 'e1_2', name: 'Département Technologie & DSI', type: 'Département', parentId: 'e1' },
-    { id: 'e1_3', name: 'Département Juridique & Compliance (ANTIC / MINPOSTEL)', type: 'Département', parentId: 'e1' },
-    { id: 'e1_4', name: 'Département Opérations & Logistique', type: 'Département', parentId: 'e1' },
-    { id: 'e2', name: 'Filiale Côte d\'Ivoire (Abidjan)', type: 'Filiale', parentId: 'e1' },
-    { id: 'e3', name: 'Filiale Gabon (Libreville)', type: 'Filiale', parentId: 'e1' },
-    { id: 'e3_1', name: 'Site Logistique Port de Douala', type: 'Site', parentId: 'e1' },
+    { id: 'e1', name: 'Direction Générale (Yaoundé)', type: 'Direction Générale / Siège', code: 'DG-YDE' },
+    { id: 'e1_1', name: 'Département Finance & Comptabilité', type: 'Département', parentId: 'e1', code: 'DEP-FIN' },
+    { id: 'e1_1_1', name: 'Service Comptabilité Générale', type: 'Service', parentId: 'e1_1', code: 'SRV-COMPTA' },
+    { id: 'e1_1_2', name: 'Cellule Trésorerie & Virements', type: 'Bureau / Cellule', parentId: 'e1_1', code: 'CEL-TRES' },
+    { id: 'e1_2', name: 'Département Technologie & DSI', type: 'Département', parentId: 'e1', code: 'DEP-DSI' },
+    { id: 'e1_2_1', name: 'Service Infrastructure & Cybersécurité', type: 'Service', parentId: 'e1_2', code: 'SRV-CYBER' },
+    { id: 'e1_2_2', name: 'Division Développement Logiciel', type: 'Division', parentId: 'e1_2', code: 'DIV-DEV' },
+    { id: 'e1_3', name: 'Département Juridique & Compliance (ANTIC / MINPOSTEL)', type: 'Département', parentId: 'e1', code: 'DEP-JUR' },
+    { id: 'e1_4', name: 'Département Opérations & Logistique', type: 'Département', parentId: 'e1', code: 'DEP-LOG' },
+    { id: 'e2', name: 'Filiale Côte d\'Ivoire (Abidjan)', type: 'Filiale / Succursale', parentId: 'e1', code: 'FIL-CIV' },
+    { id: 'e3', name: 'Filiale Gabon (Libreville)', type: 'Filiale / Succursale', parentId: 'e1', code: 'FIL-GAB' },
+    { id: 'e3_1', name: 'Site Logistique Port de Douala', type: 'Site / Usine', parentId: 'e1', code: 'SITE-DLA' },
   ]
 };
 
@@ -107,6 +124,14 @@ export const AEROTECH_CONFIG: TenantConfig = {
   companyName: 'AeroTech Cameroun SAS (Aéronautique)',
   logoUrl: 'https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=80&fit=crop&q=80',
   matrixSize: 5, // 5x5 rating engine
+  unitTypes: [
+    { id: 'ut_1', name: 'Direction Générale / Siège', level: 1, description: 'Direction Générale Aéronautique', code: 'DG' },
+    { id: 'ut_3', name: 'Direction', level: 2, description: 'Direction Technique / Qualité', code: 'DIR' },
+    { id: 'ut_4', name: 'Département', level: 3, description: 'Département Avionique / Production', code: 'DEP' },
+    { id: 'ut_5', name: 'Division', level: 4, description: 'Division Contrôle Qualité', code: 'DIV' },
+    { id: 'ut_6', name: 'Service', level: 5, description: 'Service Assemblage / Essais', code: 'SRV' },
+    { id: 'ut_8', name: 'Site / Usine', level: 6, description: 'Usine de fabrication', code: 'SITE' }
+  ],
   scales: {
     frequency: [
       { value: 1, label: 'Pratiquement impossible', description: 'Une fois par décennie' },
@@ -132,14 +157,17 @@ export const AEROTECH_CONFIG: TenantConfig = {
   },
   formula: {
     id: 'f2',
-    name: 'Formule Aéronautique P * I - M',
-    expression: '(P * I) - M', // alternate formula formula interpretation
+    name: 'Formule Aéronautique (F * I) - M',
+    expression: '(F * I) - M', // alternate formula interpretation
     variables: [
-      { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 5 },
+      { name: 'F', label: 'Probabilité/Fréquence', min: 1, max: 5 },
       { name: 'I', label: 'Impact', min: 1, max: 5 },
       { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 5 },
     ],
-    description: 'Score Brut = P x I (max 25). Score Net = (P x I) - M (échelle de 0 à 24 pour intégrer la mitigation soustractive).',
+    description: 'Score Brut = F x I (max 25). Score Net = (F x I) - M (échelle de 0 à 24 pour intégrer la mitigation soustractive).',
+    formulaType: 'AERO_SUBTRACTIVE',
+    ratingMode: 'FREQUENCY_IMPACT',
+    netFormulaType: 'SUBTRACTIVE'
   },
   matrixThresholds: [
     { label: 'Risque Mineur', minScore: 0, maxScore: 5, color: 'bg-green-100 text-green-800 border-green-200', textColor: '#15803d', description: 'Risques acceptables sans correction indispensable.' },
@@ -159,10 +187,10 @@ export const AEROTECH_CONFIG: TenantConfig = {
     { id: 'cat_admin', name: 'Juridique & Financier', color: '#f59e0b', description: 'Retards de livraison sur pénalités financières.' },
   ],
   entities: [
-    { id: 'e1', name: 'Direction Aérospatiale Camerounaise', type: 'Direction' },
-    { id: 'e1_1', name: 'Bureau d\'Études Avionique de Yaoundé', type: 'Département', parentId: 'e1' },
-    { id: 'e1_2', name: 'Usine Assemblage Garoua', type: 'Site', parentId: 'e1' },
-    { id: 'e1_3', name: 'Direction Qualité Globale - Douala', type: 'Département', parentId: 'e1' },
+    { id: 'e1', name: 'Direction Aérospatiale Camerounaise', type: 'Direction Générale / Siège', code: 'DAC' },
+    { id: 'e1_1', name: 'Bureau d\'Études Avionique de Yaoundé', type: 'Département', parentId: 'e1', code: 'BEA' },
+    { id: 'e1_2', name: 'Usine Assemblage Garoua', type: 'Site / Usine', parentId: 'e1', code: 'USINE-GAR' },
+    { id: 'e1_3', name: 'Direction Qualité Globale - Douala', type: 'Direction', parentId: 'e1', code: 'DIR-QUAL' },
   ]
 };
 

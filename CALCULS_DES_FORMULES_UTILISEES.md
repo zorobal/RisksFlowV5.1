@@ -1,95 +1,82 @@
-# Formules et Algorithmes de Calcul GRC
+# Formules, Échelles et Algorithmes de Calcul GRC (Sogesti GRC Engine)
 
-Ce document décrit en détail les équations mathématiques et logiques implémentées au sein de la plateforme Sogesti GRC pour évaluer et cartographier les risques d'entreprise.
-
----
-
-## 1. Criticité Brute du Risque (Gross Risk Score)
-
-La criticité brute évalue l'exposition intrinsèque d'un risque sans considérer l'effet réducteur des dispositifs de contrôle interne.
-
-### Formule Générale :
-$$\text{Criticité Brute} (C_B) = \text{Probabilité / Fréquence} (P) \times \text{Impact} (I)$$
-
-- **Probabilité / Fréquence ($P$ ou $F$)** : Note entière de 1 à $N$ évaluant la récurrence de la menace.
-- **Impact ($I$)** : Note entière de 1 à $N$ évaluant la sévérité financière, opérationnelle ou réputationnelle.
-- **Taille de la Matrice ($N$)** : Égale à **4** (échelle 4x4) ou **5** (échelle 5x5) selon le paramétrage du Tenant.
-
-### Bornes de Criticité Brute ($C_B$) :
-- Matrice 4x4 : $C_B \in [1, 16]$
-- Matrice 5x5 : $C_B \in [1, 25]$
+Ce document décrit en détail les équations mathématiques, les modes de cotation et les algorithmes logiques de calcul implémentés au sein de la plateforme Sogesti GRC pour évaluer et cartographier les risques d'entreprise.
 
 ---
 
-## 2. Formule 1 : Évaluation Réglementaire IFACI (Sogesti S.A.)
+## 1. Choix du Mode de Cotation de la Sévérité Brut
 
-La méthode IFACI (Institut Français des Auditeurs et Contrôleurs Internes) s'appuie sur une approche multiplicative modérée par l'indice de maîtrise des contrôles.
+Sogesti GRC permet au Administrateurs Tenant de choisir la terminologie et la formule de cotation intrinsèque :
 
-### Équations IFACI :
-1. **Facteur de Maîtrise ($M$)** :
-   $$M = 1 - \frac{\text{Taux de Contrôle } (\%)}{100}$$
-   *(Un contrôle efficace à 80% donne un facteur de maîtrise $M = 0.20$)*.
+1. **Mode Fréquence × Impact ($F \times I$)** : Recommandé pour l'audit opérationnel et les contrôles récurrents.
+2. **Mode Probabilité × Impact ($P \times I$)** : Standard COSO / ISO 31000 privilégié pour la gestion des risques stratégiques et projets.
 
-2. **Criticité Résiduelle IFACI ($C_R$)** :
-   $$C_R = \text{Fréquence} (F) \times \text{Impact} (I) \times M$$
-
-### Exemple Numérique (Risque Cyber R-101 sur Grille 4x4) :
-- Fréquence $F = 4$, Impact $I = 4 \implies C_B = 16$ (Risque Élevé - Rouge).
-- Efficacité des contrôles mis en œuvre (MFA, Pare-feu) = $75\% \implies M = 0.25$.
-- Criticité Résiduelle : $C_R = 4 \times 4 \times 0.25 = 4.0$ (Risque Faible - Vert).
+### Formule Générale du Score Brut ($S_B$) :
+$$S_B = \text{Dimension } 1 (F \text{ ou } P) \times \text{Dimension } 2 (I)$$
 
 ---
 
-## 3. Formule 2 : Évaluation Mitigée Soustraite (AeroTech)
+## 2. Dimensionnement Paramétrable de la Matrice (Heatmap Layout)
 
-Pour les secteurs industriels ou aéronautiques nécessitant un calcul additif direct de remédiation, Sogesti GRC propose la formule mitigée soustraite.
+La dimension de la grille de criticité ($N \times N$) est entièrement paramétrable de $N = 3$ à $N = 10$ :
 
-### Équation Mitigée :
-$$C_R = \max \left( 1, (P \times I) - \text{Valeur de Mitigation} \right)$$
-
-- **Valeur de Mitigation** : Score entier représentant la capacité d'absorption des contrôles et des plans d'actions correctives.
-- **Garantie Plancher** : La criticité résiduelle ne peut pas être inférieure à 1.
-
-### Exemple Numérique (Risque Calibrage R-202 sur Grille 5x5) :
-- Probabilité $P = 5$, Impact $I = 4 \implies C_B = 20$ (Risque Élevé - Rouge).
-- Mitigation apportée par l'étalonnage automatisé = $12$.
-- Criticité Résiduelle : $C_R = \max(1, 20 - 12) = 8$ (Risque Modéré - Orange).
+| Dimensions | Usage Principal | Score Brut Max ($N^2$) |
+| :--- | :--- | :--- |
+| **3 × 3** | Grille Simplifiée TPE / PME | **9** |
+| **4 × 4** | Standard IFACI 2013 | **16** |
+| **5 × 5** | Standard COSO / Aéronautique / ISO 31000 | **25** |
+| **6 × 6** | Grille Avancée Granulaire | **36** |
+| **7 × 7** | Grille Très Haute Résolution | **49** |
+| **10 × 10**| Précision Décimale Avancée | **100** |
 
 ---
 
-## 4. Projection des Coordonnées sur la Matrice (Heatmap)
+## 3. Algorithmes de Calcul du Score Net (Atténuation / Maîtrise)
 
-Pour positionner graphiquement les risques sur la grille thermique 4x4 ou 5x5, l'algorithme calcule les coordonnées résiduelles ajustées ($P_{\text{net}}, I_{\text{net}}$) :
+Le moteur de calcul (`calculateRiskScores`) supporte 4 modèles algorithmiques de pondération du contrôle interne ($M$) :
 
-1. **Impact Résiduel Ajusté ($I_{\text{net}}$)** :
-   $$I_{\text{net}} = \max \left( 1, \text{round} \left( I \times \left(1 - \frac{\text{Contrôle \%}}{100} \times F_{\text{impact}} \right) \right) \right)$$
+### Modèle 1 : Standard Multiplicatif IFACI (`IFACI_MULTIPLICATIVE`)
+$$\text{Score Net } (S_N) = \text{round}\left(S_B \times \frac{M}{N}\right)$$
+*Exemple : Sur grille 5x5 ($N=5$), un risque $S_B = 20$ avec un contrôle de niveau $M = 2 \implies S_N = \text{round}(20 \times 0.4) = 8$.*
 
-2. **Probabilité Résiduelle Ajustée ($P_{\text{net}}$)** :
-   $$P_{\text{net}} = \max \left( 1, \text{round} \left( P \times \left(1 - \frac{\text{Contrôle \%}}{100} \times F_{\text{freq}} \right) \right) \right)$$
+### Modèle 2 : Soustractif de Mitigation AeroTech (`AERO_SUBTRACTIVE`)
+$$\text{Score Net } (S_N) = \max\left(1, S_B - M\right)$$
+*Exemple : Un risque $S_B = 20$ déduit d'un indice de mitigation $M = 12 \implies S_N = \max(1, 20 - 12) = 8$.*
 
----
+### Modèle 3 : Divisionnaire Proportionnel (`DIVISIONAL`)
+$$\text{Score Net } (S_N) = \max\left(1, \text{round}\left(\frac{S_B}{M}\right)\right)$$
+*Exemple : Un risque $S_B = 20$ divisé par la maturité $M = 4 \implies S_N = 5$.*
 
-## 5. Niveaux de Gravité et Plages de Criticité
-
-Les risques sont automatiquement classifiés selon trois niveaux de sévérité :
-
-### Pour une Matrice 4x4 :
-- **🟢 Risque Faible (Vert)** : Score $C_B \text{ ou } C_R \in [1, 4]$
-- **🟡 Risque Modéré (Orange)** : Score $C_B \text{ ou } C_R \in [5, 9]$
-- **🔴 Risque Élevé (Rouge)** : Score $C_B \text{ ou } C_R \in [10, 16]$ *(Déclenche une alerte prioritaire et requiert un plan d'action d'urgence)*.
-
-### Pour une Matrice 5x5 :
-- **🟢 Risque Faible (Vert)** : Score $C_B \text{ ou } C_R \in [1, 6]$
-- **🟡 Risque Modéré (Orange)** : Score $C_B \text{ ou } C_R \in [7, 14]$
-- **🔴 Risque Élevé (Rouge)** : Score $C_B \text{ ou } C_R \in [15, 25]$ *(Déclenche une alerte prioritaire immédiate expédiée par e-mail au Risk Manager et requiert un plan d'action d'urgence)*.
+### Modèle 4 : Direct Sans Maîtrise (`DIRECT_BRUT`)
+$$\text{Score Net } (S_N) = S_B$$
 
 ---
 
-## 6. Règles de Déclenchement des Notifications E-mails Automatiques
+## 4. Consolidation Arborescente et Périmètres Hiérarchiques / Matriciels
 
-Lorsque le module **Serveur SMTP** est activé pour l'entreprise cliente, la plateforme exécute des règles d'expédition automatique :
+La plateforme Sogesti GRC permet de structurer les entités selon une arborescence multi-niveaux personnalisée :
 
-1. **Alerte Risque Critique** : Expédition instantanée d'un avis d'urgence si Score de Criticité $\ge 15/25$ (ou $\ge 10/16$).
+### Hiérarchisation des Types d'Unités (`UnitTypeConfig`) :
+- **Niveau 1** : Groupe / Siège / Direction Générale (`GRP`)
+- **Niveau 2** : Filiales / Succursales Référencées (`FIL`)
+- **Niveau 3** : Directions Opérationnelles (`DIR`)
+- **Niveau 4** : Départements / Divisions (`DEP` / `DIV`)
+- **Niveau 5** : Services / Sections (`SRV`)
+- **Niveau 6** : Sites / Bureaux Localisés (`SIT` / `BUR`)
+
+### Algorithme de Traversée Récursive des Enfants (`getDescendantEntityIds`) :
+Lors de la sélection d'une entité cliente (ex: une Direction), l'algorithme extrait récursivement l'ensemble des identifiants descendants. Ainsi, visualiser la cartographie d'une Direction inclut automatiquement les risques de tous ses départements, services et bureaux rattachés.
+
+### Support du Double-Rattachement Matriciel :
+En mode **Consolidation Matricielle**, le système agrège également les entités ayant un rattachement fonctionnel secondaire (`rattachementsSecondaires`), assurant une vision à 360° des risques transverses.
+
+---
+
+## 5. Règles de Déclenchement des Notifications E-mails Automatiques
+
+Lorsque le module **Serveur SMTP** est activé, la plateforme exécute les règles suivantes :
+
+1. **Alerte Risque Critique** : Expédition instantanée d'un avis d'urgence si Score de Criticité atteint la zone rouge.
 2. **Assignation de Plan d'Action** : Notification transmise au responsable nommé lors de l'attribution d'une tâche de mitigation.
 3. **Missions d'Audit** : Envoi automatique des convocations et avis de mission d'audit interne.
 4. **Clôture d'Exercice Fiscal** : Diffusion du bilan annuel consolidé lors de la clôture officielle par la Direction.

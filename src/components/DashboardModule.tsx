@@ -25,6 +25,7 @@ import {
   ListFilter
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
+import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
   risks: Risk[];
@@ -476,23 +477,18 @@ ${
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Organization Selector */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Entité & Périmètre</label>
-            <select
-              value={selectedEntityId}
-              onChange={(e) => {
-                setSelectedEntityId(e.target.value);
-                setSelectedCell(null); // Clear selected cell on perimeter change
+          <div>
+            <OrgEntityTreeFilter
+              entities={tenantConfig.entities}
+              selectedEntityId={selectedEntityId}
+              onSelectEntity={(id) => {
+                setSelectedEntityId(id);
+                setSelectedCell(null);
               }}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded p-2 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer text-xs"
-            >
-              <option value="all">Périmètre Global (Toutes les entités)</option>
-              {tenantConfig.entities.map(e => (
-                <option key={e.id} value={e.id}>
-                  {e.type === 'Filiale' ? '🏢 ' : e.type === 'Site' ? '📍 ' : '📁 '} {e.name} ({e.type})
-                </option>
-              ))}
-            </select>
+              label="Entité & Périmètre"
+              includeAllOption={true}
+              allOptionLabel="Périmètre Global (Toutes les entités)"
+            />
           </div>
 
           {/* Org Mode: Hierarchical vs Matriciel */}

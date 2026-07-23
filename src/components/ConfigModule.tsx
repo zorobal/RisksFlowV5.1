@@ -32,8 +32,105 @@ import {
   Server,
   ArrowUp,
   ArrowDown,
-  Edit
+  Edit,
+  GripVertical
 } from 'lucide-react';
+
+export function generateScalesForSize(size: number): {
+  frequency: ScaleItem[];
+  impact: ScaleItem[];
+  control: ScaleItem[];
+} {
+  if (size === 3) {
+    return {
+      frequency: [
+        { value: 1, label: 'Faible / Improbable (1)', description: 'Événement rare (fréquence < 1 fois tous les 5 ans)' },
+        { value: 2, label: 'Moyen / Probable (2)', description: 'Pouvant se produire occasionnellement (1 fois par an)' },
+        { value: 3, label: 'Élevé / Très Probable (3)', description: 'Fréquent ou répétitif au cours de l\'exercice' }
+      ],
+      impact: [
+        { value: 1, label: 'Faible / Mineur (1)', description: 'Impact financier ou opérationnel négligeable' },
+        { value: 2, label: 'Moyen / Modéré (2)', description: 'Impact notable nécessitant un réajustement des ressources' },
+        { value: 3, label: 'Élevé / Critique (3)', description: 'Impact majeur ou menace pour la pérennité de l\'unité' }
+      ],
+      control: [
+        { value: 1, label: 'Insuffisant / Non Maîtrisé (1)', description: 'Dispositif de contrôle inexistant ou défaillant' },
+        { value: 2, label: 'Partiellement Maîtrisé (2)', description: 'Contrôles existants mais régularité imparfaite' },
+        { value: 3, label: 'Totalement Maîtrisé (3)', description: 'Contrôles automatisés, testés et optimaux' }
+      ]
+    };
+  } else if (size === 4) {
+    return {
+      frequency: [
+        { value: 1, label: 'Exceptionnel (1)', description: 'Occurrence quasi nulle (<1%) sur 2 ans' },
+        { value: 2, label: 'Rare (2)', description: 'Occurrence possible mais peu probable (1 à 10%) sur 2 ans' },
+        { value: 3, label: 'Probable (3)', description: 'Occurrence plausible (10 à 50%) sur 2 ans' },
+        { value: 4, label: 'Très probable (4)', description: 'Occurrence très probable (>50%) sur 2 ans' }
+      ],
+      impact: [
+        { value: 1, label: 'Limité (1)', description: '<5 % du résultat annuel. Attention de tiers ou observation' },
+        { value: 2, label: 'Significatif (2)', description: '5% à 30% du résultat annuel. Communication défavorable' },
+        { value: 3, label: 'Majeur (3)', description: '30% à 50% du résultat annuel. Couverture large, blâme' },
+        { value: 4, label: 'Critique (4)', description: '>50% du résultat annuel. Retrait d\'agrément ou condamnation' }
+      ],
+      control: [
+        { value: 1, label: 'Maîtrisé (1)', description: 'Règles écrites et détaillées, contrôles formalisés et appliqués' },
+        { value: 2, label: 'Acceptable (2)', description: 'Règles écrites à compléter, contrôles existants à formaliser' },
+        { value: 3, label: 'Insuffisant (3)', description: 'Règles orales, contrôles partiels peu structurés' },
+        { value: 4, label: 'Faible / Néant (4)', description: 'Absence d\'éléments de maîtrise, aucune règle formalisée' }
+      ]
+    };
+  } else if (size === 5) {
+    return {
+      frequency: [
+        { value: 1, label: 'Très Faible / Rareté Extrême (1)', description: 'Événement exceptionnel (< 5% de probabilité)' },
+        { value: 2, label: 'Faible / Peu Fréquent (2)', description: 'Survenance possible tous les 2 à 5 ans' },
+        { value: 3, label: 'Moyen / Occasionnel (3)', description: 'Périodicité annuelle estimée' },
+        { value: 4, label: 'Élevé / Fréquent (4)', description: 'Survenance mensuelle à trimestrielle' },
+        { value: 5, label: 'Très Élevé / Pratiquement Certain (5)', description: 'Survenance permanente ou quasi-systématique' }
+      ],
+      impact: [
+        { value: 1, label: 'Insignifiant / Très Faible (1)', description: 'Pertes financières négligeables (< 5 K€)' },
+        { value: 2, label: 'Mineur / Faible (2)', description: 'Impact contenu sans perturbation de la continuité' },
+        { value: 3, label: 'Modéré / Moyen (3)', description: 'Pertes significatives nécessitant arbitrage de la direction' },
+        { value: 4, label: 'Majeur / Élevé (4)', description: 'Perturbation grave et impact réputationnel étendu' },
+        { value: 5, label: 'Catastrophique / Critique (5)', description: 'Risque systémique ou sanction réglementaire majeure' }
+      ],
+      control: [
+        { value: 1, label: 'Inexistant / Défaillant (1)', description: 'Aucun contrôle identifié' },
+        { value: 2, label: 'Faible (2)', description: 'Contrôles informels non documentés' },
+        { value: 3, label: 'Moyen / Partiel (3)', description: 'Contrôles documentés mais appliqués partiellement' },
+        { value: 4, label: 'Élevé (4)', description: 'Contrôles systématiques et éprouvés' },
+        { value: 5, label: 'Optimal / Excellent (5)', description: 'Maîtrise parfaite, continue et intégrée' }
+      ]
+    };
+  } else {
+    const freqItems: ScaleItem[] = [];
+    const impItems: ScaleItem[] = [];
+    const ctrlItems: ScaleItem[] = [];
+
+    for (let i = 1; i <= size; i++) {
+      const pct = Math.round((i / size) * 100);
+      freqItems.push({
+        value: i,
+        label: `Fréquence / Probabilité ${i} (${i}/${size})`,
+        description: `Occurrence évaluée au niveau ${i} sur ${size} (≈${pct}%)`
+      });
+      impItems.push({
+        value: i,
+        label: `Sévérité / Impact ${i} (${i}/${size})`,
+        description: `Gravité des pertes évaluée au palier ${i} sur ${size}`
+      });
+      ctrlItems.push({
+        value: i,
+        label: `Niveau de Maîtrise ${i} (${i}/${size})`,
+        description: `Couverture du contrôle interne au niveau ${i} sur ${size}`
+      });
+    }
+
+    return { frequency: freqItems, impact: impItems, control: ctrlItems };
+  }
+}
 import { 
   TenantConfig, 
   ScaleItem, 
@@ -110,7 +207,7 @@ export default function ConfigModule({
     options?: string;
     required: boolean;
   }>([
-    { id: 'cf_1', targetObject: 'Risque', label: 'Montant d\'assurance spécifique (€)', code: 'VALEUR_ASSURANCE', type: 'Nombre', required: false },
+    { id: 'cf_1', targetObject: 'Risque', label: "Montant d'assurance spécifique (€)", code: 'VALEUR_ASSURANCE', type: 'Nombre', required: false },
     { id: 'cf_2', targetObject: 'Risque', label: 'Référent Technique Métier', code: 'REF_TECH', type: 'Texte', required: true },
     { id: 'cf_3', targetObject: 'Incident', label: 'Infiltration / Fiche SSI', code: 'INC_SSI', type: 'Case à cocher', required: false },
     { id: 'cf_4', targetObject: 'Action', label: 'Centre de coût rattaché', code: 'CENTRE_COUT', type: 'Liste', options: 'Finance, DSI, Logistique, RH', required: true }
@@ -147,9 +244,17 @@ export default function ConfigModule({
     setCustomFields(customFields.filter(cf => cf.id !== id));
   };
 
+  // Org Tab Sub-mode & Unit Types Inputs
+  const [orgSubTab, setOrgSubTab] = useState<'units' | 'unit_types'>('units');
+  const [newUnitCode, setNewUnitCode] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitIcon, setNewUnitIcon] = useState('📁');
+  const [newUnitLevel, setNewUnitLevel] = useState(4);
+  const [newUnitDesc, setNewUnitDesc] = useState('');
+
   // Org Node Inputs
   const [newOrgName, setNewOrgName] = useState('');
-  const [newOrgType, setNewOrgType] = useState<OrgEntity['type']>('Département');
+  const [newOrgType, setNewOrgType] = useState<string>('Département');
   const [newOrgParent, setNewOrgParent] = useState('');
   const [newOrgCode, setNewOrgCode] = useState('');
   const [newOrgSecondary, setNewOrgSecondary] = useState<string>(''); // For matriciel
@@ -158,6 +263,121 @@ export default function ConfigModule({
   const [newOrgVille, setNewOrgVille] = useState('');
   const [newOrgPays, setNewOrgPays] = useState('');
   const [newOrgAdresse, setNewOrgAdresse] = useState('');
+
+  // --- Unit Types Administration ---
+  const [draggedUnitTypeIndex, setDraggedUnitTypeIndex] = useState<number | null>(null);
+
+  const defaultUnitTypesList = [
+    { id: 'ut_grp', code: 'GRP', name: 'Groupe / Direction Générale', level: 1, icon: '🏛️', description: 'Niveau d’administration supérieure du groupe' },
+    { id: 'ut_fil', code: 'FIL', name: 'Filiale', level: 2, icon: '🏢', description: 'Entité juridique fille ou succursale régionale' },
+    { id: 'ut_dir', code: 'DIR', name: 'Direction', level: 3, icon: '👨‍💼', description: 'Direction opérationnelle ou fonctionnelle' },
+    { id: 'ut_dep', code: 'DEP', name: 'Département', level: 4, icon: '📁', description: 'Unité départementale rattachée à une direction' },
+    { id: 'ut_srv', code: 'SRV', name: 'Service', level: 5, icon: '🔧', description: 'Service opérationnel de proximité' },
+    { id: 'ut_sit', code: 'SIT', name: 'Site / Bureau', level: 6, icon: '📍', description: 'Site physique local ou bureau d’exploitation' },
+  ];
+
+  const currentUnitTypes = tenantConfig.unitTypes && tenantConfig.unitTypes.length > 0
+    ? tenantConfig.unitTypes
+    : defaultUnitTypesList;
+
+  const handleAddUnitType = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitName.trim() || !newUnitCode.trim()) return;
+
+    const targetLevel = Number(newUnitLevel) || currentUnitTypes.length + 1;
+
+    const newUT = {
+      id: `ut_${Date.now()}`,
+      code: newUnitCode.trim().toUpperCase(),
+      name: newUnitName.trim(),
+      level: targetLevel,
+      icon: newUnitIcon || '📁',
+      description: newUnitDesc.trim() || undefined
+    };
+
+    const list = [...currentUnitTypes];
+    const insertIndex = Math.min(Math.max(0, targetLevel - 1), list.length);
+    list.splice(insertIndex, 0, newUT);
+
+    const updatedUnitTypes = list.map((ut, idx) => ({
+      ...ut,
+      level: idx + 1
+    }));
+
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      unitTypes: updatedUnitTypes
+    });
+
+    onAddLog('Config Structure', `Ajout du type d'unité organique "${newUnitName}" (Niveau Hiérarchique ${insertIndex + 1})`);
+    setNewUnitCode('');
+    setNewUnitName('');
+    setNewUnitDesc('');
+  };
+
+  const handleRemoveUnitType = (id: string) => {
+    const filtered = currentUnitTypes.filter(u => u.id !== id);
+    const updatedUT = filtered.map((ut, idx) => ({
+      ...ut,
+      level: idx + 1
+    }));
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      unitTypes: updatedUT
+    });
+    onAddLog('Config Structure', `Suppression du type d'unité ID ${id}`);
+  };
+
+  const handleMoveUnitType = (index: number, direction: 'up' | 'down') => {
+    const list = [...currentUnitTypes];
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === list.length - 1) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    const reordered = list.map((ut, idx) => ({
+      ...ut,
+      level: idx + 1
+    }));
+
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      unitTypes: reordered
+    });
+    onAddLog('Config Structure', `Hiérarchie modifiée : "${temp.name}" est maintenant au Niveau ${targetIndex + 1}`);
+  };
+
+  const handleDragStartUnitType = (e: React.DragEvent, index: number) => {
+    setDraggedUnitTypeIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOverUnitType = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropUnitType = (dropIndex: number) => {
+    if (draggedUnitTypeIndex === null || draggedUnitTypeIndex === dropIndex) return;
+    const list = [...currentUnitTypes];
+    const [movedItem] = list.splice(draggedUnitTypeIndex, 1);
+    list.splice(dropIndex, 0, movedItem);
+
+    const reordered = list.map((ut, idx) => ({
+      ...ut,
+      level: idx + 1
+    }));
+
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      unitTypes: reordered
+    });
+    setDraggedUnitTypeIndex(null);
+    onAddLog('Config Structure', `Type d'unité "${movedItem.name}" déplacé au Niveau Hiérarchique ${dropIndex + 1} (Glisser-Déposer).`);
+  };
 
   // Function & Assignment Inputs
   const [newFTitle, setNewFTitle] = useState('');
@@ -670,10 +890,21 @@ export default function ConfigModule({
 
   const handleMatrixSizeUpdate = (newSize: number) => {
     setMatrixSize(newSize);
+    const newScales = generateScalesForSize(newSize);
     onUpdateTenantConfig({
       ...tenantConfig,
-      matrixSize: newSize
+      matrixSize: newSize,
+      scales: newScales,
+      formula: {
+        ...tenantConfig.formula,
+        variables: [
+          { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: newSize },
+          { name: 'I', label: 'Impact', min: 1, max: newSize },
+          { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: newSize }
+        ]
+      }
     });
+    onAddLog('Config Moteur', `Dimension de la matrice de criticité mise à jour à ${newSize}×${newSize} et échelles de cotation (P, I, M) ré-étalonnées de 1 à ${newSize}.`);
   };
 
   // Indented helper to display nested structure
@@ -869,77 +1100,299 @@ export default function ConfigModule({
           {/* TAB: ORGANIGRAMME */}
           {activeTab === 'org' && (
             <div className="space-y-6">
-              <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
+              <div className="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-2">
                 <div>
-                  <h3 className="font-bold text-sm text-slate-800">Organigramme Hiérarchique & Matriciel (Section 2.1)</h3>
-                  <p className="text-slate-400 text-[10.5px]">Configurez la structure arborescente de votre organisation avec gestion des rattachements fonctionnels multiples et succursales optionnelles.</p>
+                  <h3 className="font-bold text-sm text-slate-800">Organisation, Types d'Unités & Structure Arborescente</h3>
+                  <p className="text-slate-400 text-[10.5px]">Configurez les types d'unités (Directions, Départements, Services, Filiales, Bureaux) et bâtissez votre organigramme multi-niveaux.</p>
                 </div>
-                {(() => {
-                  const currentSuccursalesCount = tenantConfig.entities.filter(
-                    e => e.statut !== 'Archivé' && e.est_succursale === true
-                  ).length;
-                  const isNearLimit = currentSuccursalesCount >= maxSuccursales;
-                  return (
-                    <div className="flex items-center space-x-2">
-                      {!succursalesActives && (
-                        <div className="bg-slate-100 border border-slate-200 text-slate-500 rounded px-2.5 py-1 text-right text-[9px] font-bold uppercase">
-                          Succursales désactivées
-                        </div>
-                      )}
-                      <div className={`border rounded px-3 py-1 text-right ${
-                        isNearLimit ? 'bg-red-50 border-red-200 text-red-800' : 'bg-indigo-50 border-indigo-150 text-indigo-950'
-                      }`}>
-                        <span className="text-[9px] text-slate-500 block font-bold uppercase tracking-wider">Quota Succursales</span>
-                        <span className="font-mono text-xs font-bold">
-                          {currentSuccursalesCount} / {maxSuccursales} contractuelles
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
+                
+                {/* Sub-tab navigation */}
+                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setOrgSubTab('units')}
+                    className={`py-1 px-3 text-center rounded text-xs font-bold transition cursor-pointer ${
+                      orgSubTab === 'units' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    🌳 Organigramme Des Unités
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrgSubTab('unit_types')}
+                    className={`py-1 px-3 text-center rounded text-xs font-bold transition cursor-pointer ${
+                      orgSubTab === 'unit_types' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    ⚙️ Types d'Unités & Niveaux ({currentUnitTypes.length})
+                  </button>
+                </div>
               </div>
 
-              {/* Add form */}
-              <form onSubmit={handleAddOrgNode} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-10 gap-3 items-end">
-                  <div className="space-y-1 sm:col-span-3">
-                    <label className="text-[9px] text-slate-400 font-bold uppercase block">Libellé Unité</label>
-                    <input 
-                      type="text"
-                      required
-                      placeholder="Ex. Direction Financière..."
-                      value={newOrgName}
-                      onChange={(e) => setNewOrgName(e.target.value)}
-                      className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
-                    />
+              {/* SUB-VIEW 1: UNIT TYPES CONFIGURATION */}
+              {orgSubTab === 'unit_types' && (
+                <div className="space-y-6 animate-fade-in">
+                  <form onSubmit={handleAddUnitType} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                      Déclarer un Nouveau Type d'Unité Organique (Niveau Hiérarchique)
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Code Court</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex. DIV, CEL..."
+                          value={newUnitCode}
+                          onChange={(e) => setNewUnitCode(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-mono font-bold text-indigo-700 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-4">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Libellé du Type d'Unité</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex. Division, Cellule, Bureau, Agence..."
+                          value={newUnitName}
+                          onChange={(e) => setNewUnitName(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-semibold text-slate-800 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Icône / Émojie</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex. 📂, 🏢, 📍..."
+                          value={newUnitIcon}
+                          onChange={(e) => setNewUnitIcon(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-center font-semibold text-slate-800 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Niveau Hiérarchique</label>
+                        <select
+                          value={newUnitLevel}
+                          onChange={(e) => setNewUnitLevel(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-bold text-slate-800 focus:outline-none"
+                        >
+                          <option value="1">1 - Groupe / Siège</option>
+                          <option value="2">2 - Filiale / Région</option>
+                          <option value="3">3 - Direction</option>
+                          <option value="4">4 - Département / Division</option>
+                          <option value="5">5 - Service / Section</option>
+                          <option value="6">6 - Bureau / Cellule</option>
+                          <option value="7">7 - Poste / Agence</option>
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <button
+                          type="submit"
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded text-xs shadow transition cursor-pointer"
+                        >
+                          Ajouter Type
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase block">Description / Rôle institutionnel (Optionnel)</label>
+                      <input 
+                        type="text"
+                        placeholder="Ex. Unité de coordination technique rattachée directement aux directions..."
+                        value={newUnitDesc}
+                        onChange={(e) => setNewUnitDesc(e.target.value)}
+                        className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none"
+                      />
+                    </div>
+                  </form>
+
+                  {/* Types Inventory */}
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                      <div>
+                        <h4 className="font-extrabold text-slate-800 uppercase text-xs">Types d'Unités Configurés par Ordre Hiérarchique</h4>
+                        <p className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
+                          <span>💡 Glissez-déposez les lignes ou utilisez les flèches</span>
+                          <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 rounded">⬆️ ⬇️</span>
+                          <span>pour spécifier la hiérarchie. Le niveau est recalculé automatiquement.</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                      <table className="w-full border-collapse text-left">
+                        <thead>
+                          <tr className="bg-slate-50 text-[9px] text-slate-500 uppercase font-black tracking-wider border-b border-slate-200">
+                            <th className="py-2.5 px-2 text-center w-10">Glisser</th>
+                            <th className="py-2.5 px-3 text-center">Niveau</th>
+                            <th className="py-2.5 px-3">Type Unité</th>
+                            <th className="py-2.5 px-3">Code</th>
+                            <th className="py-2.5 px-3">Description</th>
+                            <th className="py-2.5 px-3 text-center">Unités Existantes</th>
+                            <th className="py-2.5 px-3 text-center">Actions / Hiérarchie</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-xs">
+                          {currentUnitTypes.map((ut, idx) => {
+                            const count = tenantConfig.entities.filter(e => e.type === ut.name || e.type === ut.code).length;
+                            const isDragging = draggedUnitTypeIndex === idx;
+                            return (
+                              <tr 
+                                key={ut.id} 
+                                draggable
+                                onDragStart={(e) => handleDragStartUnitType(e, idx)}
+                                onDragOver={handleDragOverUnitType}
+                                onDrop={() => handleDropUnitType(idx)}
+                                className={`transition select-none ${
+                                  isDragging ? 'opacity-40 bg-indigo-50 border-2 border-dashed border-indigo-400' : 'hover:bg-indigo-50/40'
+                                }`}
+                              >
+                                <td className="py-2.5 px-2 text-center">
+                                  <div className="flex items-center justify-center cursor-grab active:cursor-grabbing text-slate-400 hover:text-indigo-600 p-1" title="Glisser-déposer pour modifier le niveau hiérarchique">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-bold text-indigo-600">
+                                  <span className="bg-indigo-50 border border-indigo-150 px-2.5 py-0.5 rounded-full text-[10px] whitespace-nowrap shadow-2xs">
+                                    Niveau {ut.level}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-bold text-slate-800 flex items-center gap-2">
+                                  <span className="text-base">{ut.icon || '📁'}</span>
+                                  <span>{ut.name}</span>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-indigo-700">{ut.code}</td>
+                                <td className="py-2.5 px-3 text-slate-500 text-[11px]">{ut.description || '—'}</td>
+                                <td className="py-2.5 px-3 text-center font-bold">
+                                  <span className="bg-slate-100 border px-2 py-0.5 rounded text-[10px] text-slate-700">
+                                    {count} unité(s)
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveUnitType(idx, 'up')}
+                                      className={`p-1 rounded transition ${
+                                        idx === 0 
+                                          ? 'text-slate-200 cursor-not-allowed' 
+                                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer'
+                                      }`}
+                                      title="Monter le niveau hiérarchique (Au-dessus)"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === currentUnitTypes.length - 1}
+                                      onClick={() => handleMoveUnitType(idx, 'down')}
+                                      className={`p-1 rounded transition ${
+                                        idx === currentUnitTypes.length - 1 
+                                          ? 'text-slate-200 cursor-not-allowed' 
+                                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer'
+                                      }`}
+                                      title="Descendre le niveau hiérarchique (En-dessous)"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveUnitType(ut.id)}
+                                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition cursor-pointer ml-1"
+                                      title="Supprimer ce type d'unité"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-VIEW 2: UNITS TREE ORGANIGRAMME */}
+              {orgSubTab === 'units' && (
+                <div className="space-y-6 animate-fade-in">
+                  <div className="flex justify-between items-center">
+                    {(() => {
+                      const currentSuccursalesCount = tenantConfig.entities.filter(
+                        e => e.statut !== 'Archivé' && e.est_succursale === true
+                      ).length;
+                      const isNearLimit = currentSuccursalesCount >= maxSuccursales;
+                      return (
+                        <div className="flex items-center space-x-2">
+                          {!succursalesActives && (
+                            <div className="bg-slate-100 border border-slate-200 text-slate-500 rounded px-2.5 py-1 text-right text-[9px] font-bold uppercase">
+                              Succursales désactivées
+                            </div>
+                          )}
+                          <div className={`border rounded px-3 py-1 text-right ${
+                            isNearLimit ? 'bg-red-50 border-red-200 text-red-800' : 'bg-indigo-50 border-indigo-150 text-indigo-950'
+                          }`}>
+                            <span className="text-[9px] text-slate-500 block font-bold uppercase tracking-wider">Quota Succursales</span>
+                            <span className="font-mono text-xs font-bold">
+                              {currentSuccursalesCount} / {maxSuccursales} contractuelles
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  <div className="space-y-1 sm:col-span-2">
-                    <label className="text-[9px] text-slate-400 font-bold uppercase block">Code Court</label>
-                    <input 
-                      type="text"
-                      required
-                      placeholder="Ex. DAF-GRP..."
-                      value={newOrgCode}
-                      onChange={(e) => setNewOrgCode(e.target.value)}
-                      className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                  {/* Add form */}
+                  <form onSubmit={handleAddOrgNode} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-10 gap-3 items-end">
+                      <div className="space-y-1 sm:col-span-3">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Libellé Unité</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex. Direction Financière..."
+                          value={newOrgName}
+                          onChange={(e) => setNewOrgName(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
 
-                  <div className="space-y-1 sm:col-span-1.5 col-span-2">
-                    <label className="text-[9px] text-slate-400 font-bold uppercase block">Type Unité</label>
-                    <select
-                      value={newOrgType}
-                      onChange={(e) => setNewOrgType(e.target.value as any)}
-                      className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Direction">👨‍💼 Direction</option>
-                      <option value="Département">📁 Département</option>
-                      <option value="Service">🔧 Service</option>
-                      <option value="Site">📍 Site Local</option>
-                      <option value="Filiale">🏢 Filiale</option>
-                    </select>
-                  </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Code Court</label>
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex. DAF-GRP..."
+                          value={newOrgCode}
+                          onChange={(e) => setNewOrgCode(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-1.5 col-span-2">
+                        <label className="text-[9px] text-slate-400 font-bold uppercase block">Type Unité</label>
+                        <select
+                          value={newOrgType}
+                          onChange={(e) => setNewOrgType(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded p-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 font-bold"
+                        >
+                          {currentUnitTypes.map(ut => (
+                            <option key={ut.id} value={ut.name}>
+                              {ut.icon || '📁'} {ut.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
                   <div className="space-y-1 sm:col-span-1.5 col-span-2">
                     <label className="text-[9px] text-slate-400 font-bold uppercase block">Unité Parente</label>
@@ -1062,6 +1515,8 @@ export default function ConfigModule({
               </div>
             </div>
           )}
+        </div>
+      )}
 
           {/* TAB: FUNCTIONS & ASSIGNMENTS */}
           {activeTab === 'functions' && (
@@ -2430,69 +2885,248 @@ export default function ConfigModule({
           {activeTab === 'formula' && (
             <div className="space-y-6">
               <div className="border-b border-slate-100 pb-3">
-                <h3 className="font-bold text-sm text-slate-800">Modèles Mathématiques d'Évaluation (Risk Calculation Engine)</h3>
-                <p className="text-slate-400 text-[10.5px]">Choisissez la formule algorithmique que le moteur doit exécuter à la volée pendant la cotation d'un risque.</p>
+                <h3 className="font-bold text-sm text-slate-800">Modèles Mathématiques & Moteur de Calcul GRC (Risk Engine)</h3>
+                <p className="text-slate-400 text-[10.5px]">Configurez la terminologie de cotation, l'algorithme de calcul du score brut et net, ainsi que la dimension de la matrice de criticité.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Formulas presets */}
-                <div className="p-4 bg-slate-50 hover:bg-slate-100/65 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <strong className="text-slate-800 font-bold">Standard Multiplicatif IFACI 2013</strong>
+              {/* 1. RATING MODE CHOICE (Fréquence vs Probabilité) */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">1. Choix du Mode de Cotation de la Sévérité</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between ${
+                    (tenantConfig.formula.ratingMode || 'FREQ_IMP') === 'FREQ_IMP' 
+                      ? 'bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold' 
+                      : 'bg-white border-slate-200 text-slate-700'
+                  }`}>
+                    <div>
+                      <span className="block text-xs font-bold">Fréquence × Impact</span>
+                      <span className="text-[10px] text-slate-500 font-normal">Recommandé pour l'audit opérationnel et les risques récurrents</span>
+                    </div>
                     <input 
                       type="radio" 
-                      name="formula-select" 
-                      checked={selectedFormulaId === 'f1'}
-                      onChange={() => handleFormulaUpdate('f1')}
-                      className="accent-indigo-600 cursor-pointer"
+                      name="ratingMode"
+                      checked={(tenantConfig.formula.ratingMode || 'FREQ_IMP') === 'FREQ_IMP'}
+                      onChange={() => {
+                        onUpdateTenantConfig({
+                          ...tenantConfig,
+                          formula: {
+                            ...tenantConfig.formula,
+                            ratingMode: 'FREQ_IMP'
+                          }
+                        });
+                        onAddLog('Config Formule', 'Changement du mode de cotation vers Fréquence x Impact');
+                      }}
+                      className="accent-indigo-600"
                     />
-                  </div>
-                  <code className="block bg-slate-800 text-teal-400 font-mono p-1 px-2 rounded text-xs">
-                    Risque résiduel = P x I x M
-                  </code>
-                  <p className="text-slate-500 text-[10.5px]">
-                    Sévérité du risque net basée sur l'action de multiplication cumulative standard. Idéal pour les grands groupes bancaires et industriels complexes.
-                  </p>
-                </div>
+                  </label>
 
-                <div className="p-4 bg-slate-50 hover:bg-slate-100/65 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <strong className="text-slate-800 font-bold">Soustractif de Mitigation AeroTech</strong>
+                  <label className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between ${
+                    tenantConfig.formula.ratingMode === 'PROB_IMP' 
+                      ? 'bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold' 
+                      : 'bg-white border-slate-200 text-slate-700'
+                  }`}>
+                    <div>
+                      <span className="block text-xs font-bold">Probabilité × Impact</span>
+                      <span className="text-[10px] text-slate-500 font-normal">Standard COSO / ISO 31000 pour les risques stratégiques et projets</span>
+                    </div>
                     <input 
                       type="radio" 
-                      name="formula-select" 
-                      checked={selectedFormulaId === 'f2'}
-                      onChange={() => handleFormulaUpdate('f2')}
-                      className="accent-indigo-600 cursor-pointer"
+                      name="ratingMode"
+                      checked={tenantConfig.formula.ratingMode === 'PROB_IMP'}
+                      onChange={() => {
+                        onUpdateTenantConfig({
+                          ...tenantConfig,
+                          formula: {
+                            ...tenantConfig.formula,
+                            ratingMode: 'PROB_IMP'
+                          }
+                        });
+                        onAddLog('Config Formule', 'Changement du mode de cotation vers Probabilité x Impact');
+                      }}
+                      className="accent-indigo-600"
                     />
-                  </div>
-                  <code className="block bg-slate-800 text-teal-400 font-mono p-1 px-2 rounded text-xs">
-                    Risque net = (P x I) - M
-                  </code>
-                  <p className="text-slate-500 text-[10.5px]">
-                    Sévérité du risque net pondérée à la baisse par déduction exacte de l'indice de maturité du contrôle interne. Échelle plus resserrée.
-                  </p>
+                  </label>
                 </div>
               </div>
 
-              {/* Matrix size configurations */}
-              <div className="space-y-3 pt-4 border-t border-slate-105">
-                <h4 className="font-bold text-slate-800 text-xs">Dimensionnement de la Matrice d'Impact (Heatmap Layout)</h4>
+              {/* 2. FORMULA ENGINE CHOICE */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">2. Modèles de Calcul du Score Net (Atténuation / Maîtrise)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* IFACI Multiplicatif */}
+                  <div className={`p-4 rounded-xl border space-y-2 transition ${
+                    (tenantConfig.formula.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'
+                      ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
+                      : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <strong className="text-slate-800 font-bold text-xs">Standard Multiplicatif IFACI</strong>
+                      <input 
+                        type="radio" 
+                        name="formula-select" 
+                        checked={(tenantConfig.formula.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'}
+                        onChange={() => {
+                          onUpdateTenantConfig({
+                            ...tenantConfig,
+                            formula: {
+                              ...tenantConfig.formula,
+                              id: 'f1',
+                              name: 'Standard Multiplicatif IFACI',
+                              formulaType: 'IFACI_MULTIPLICATIVE',
+                              netFormulaType: 'IFACI_MULTIPLICATIVE',
+                              expression: 'Brut x Maîtrise'
+                            }
+                          });
+                          setSelectedFormulaId('f1');
+                          onAddLog('Config Moteur', 'Moteur de calcul changé vers IFACI Multiplicatif');
+                        }}
+                        className="accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    <code className="block bg-slate-800 text-teal-300 font-mono p-1 px-2 rounded text-[11px]">
+                      Brut = F × I | Net = round(Brut × M)
+                    </code>
+                    <p className="text-slate-500 text-[10.5px] leading-snug">
+                      La maîtrise accentue ou réduit proportionnellement le score brut. Recommandé pour les grands groupes bancaires et industriels.
+                    </p>
+                  </div>
+
+                  {/* Soustractif AeroTech */}
+                  <div className={`p-4 rounded-xl border space-y-2 transition ${
+                    tenantConfig.formula.formulaType === 'AERO_SUBTRACTIVE'
+                      ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
+                      : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <strong className="text-slate-800 font-bold text-xs">Soustractif de Mitigation (Aéronautique)</strong>
+                      <input 
+                        type="radio" 
+                        name="formula-select" 
+                        checked={tenantConfig.formula.formulaType === 'AERO_SUBTRACTIVE'}
+                        onChange={() => {
+                          onUpdateTenantConfig({
+                            ...tenantConfig,
+                            formula: {
+                              ...tenantConfig.formula,
+                              id: 'f2',
+                              name: 'Soustractif de Mitigation AeroTech',
+                              formulaType: 'AERO_SUBTRACTIVE',
+                              netFormulaType: 'AERO_SUBTRACTIVE',
+                              expression: 'Brut - Maîtrise'
+                            }
+                          });
+                          setSelectedFormulaId('f2');
+                          onAddLog('Config Moteur', 'Moteur de calcul changé vers Soustractif Aéronautique');
+                        }}
+                        className="accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    <code className="block bg-slate-800 text-teal-300 font-mono p-1 px-2 rounded text-[11px]">
+                      Brut = F × I | Net = max(1, Brut - M)
+                    </code>
+                    <p className="text-slate-500 text-[10.5px] leading-snug">
+                      L'indice de contrôle est directement déduit du score brut. Idéal pour les environnements de sûreté et de haute sécurité.
+                    </p>
+                  </div>
+
+                  {/* Divisionnaire */}
+                  <div className={`p-4 rounded-xl border space-y-2 transition ${
+                    tenantConfig.formula.formulaType === 'DIVISIONAL'
+                      ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
+                      : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <strong className="text-slate-800 font-bold text-xs">Atténuation Divisionnaire (Brut / Maîtrise)</strong>
+                      <input 
+                        type="radio" 
+                        name="formula-select" 
+                        checked={tenantConfig.formula.formulaType === 'DIVISIONAL'}
+                        onChange={() => {
+                          onUpdateTenantConfig({
+                            ...tenantConfig,
+                            formula: {
+                              ...tenantConfig.formula,
+                              id: 'f3',
+                              name: 'Modèle Divisionnaire',
+                              formulaType: 'DIVISIONAL',
+                              netFormulaType: 'DIVISIONAL',
+                              expression: 'Brut / Maîtrise'
+                            }
+                          });
+                          setSelectedFormulaId('f3');
+                          onAddLog('Config Moteur', 'Moteur de calcul changé vers Divisionnaire');
+                        }}
+                        className="accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    <code className="block bg-slate-800 text-teal-300 font-mono p-1 px-2 rounded text-[11px]">
+                      Brut = F × I | Net = max(1, round(Brut / M))
+                    </code>
+                    <p className="text-slate-500 text-[10.5px] leading-snug">
+                      Le score brut est divisé par le niveau de maîtrise de l'incident.
+                    </p>
+                  </div>
+
+                  {/* Direct Brut */}
+                  <div className={`p-4 rounded-xl border space-y-2 transition ${
+                    tenantConfig.formula.formulaType === 'DIRECT_BRUT'
+                      ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
+                      : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <strong className="text-slate-800 font-bold text-xs">Score Brut Direct (Sans Maîtrise)</strong>
+                      <input 
+                        type="radio" 
+                        name="formula-select" 
+                        checked={tenantConfig.formula.formulaType === 'DIRECT_BRUT'}
+                        onChange={() => {
+                          onUpdateTenantConfig({
+                            ...tenantConfig,
+                            formula: {
+                              ...tenantConfig.formula,
+                              id: 'f4',
+                              name: 'Modèle Direct',
+                              formulaType: 'DIRECT_BRUT',
+                              netFormulaType: 'DIRECT_BRUT',
+                              expression: 'Brut Direct'
+                            }
+                          });
+                          setSelectedFormulaId('f4');
+                          onAddLog('Config Moteur', 'Moteur de calcul changé vers Score Brut Direct');
+                        }}
+                        className="accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    <code className="block bg-slate-800 text-teal-300 font-mono p-1 px-2 rounded text-[11px]">
+                      Brut = F × I | Net = Score Brut
+                    </code>
+                    <p className="text-slate-500 text-[10.5px] leading-snug">
+                      Évalue uniquement la sévérité intrinsèque du risque sans pondération additionnelle de contrôle interne.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. MATRIX SIZE CONFIGURATION */}
+              <div className="space-y-3 pt-4 border-t border-slate-200">
+                <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">3. Dimensionnement de la Matrice d'Impact (Heatmap Layout)</h4>
                 <div className="flex items-center gap-3">
-                  <span className="text-slate-500 font-medium">Taille de grille configurée :</span>
+                  <span className="text-slate-600 font-semibold">Dimensions de la grille de criticité :</span>
                   <select
                     value={matrixSize}
                     onChange={(e) => handleMatrixSizeUpdate(Number(e.target.value))}
-                    className="bg-slate-100 border border-slate-200 text-indigo-600 rounded p-1.5 font-bold text-xs cursor-pointer"
+                    className="bg-white border border-slate-300 text-indigo-700 rounded p-1.5 font-bold text-xs cursor-pointer focus:outline-none focus:border-indigo-500 shadow-2xs"
                   >
-                    <option value="3">3 x 3 - Simplifiée</option>
-                    <option value="4">4 x 4 - Modèle IFACI 2013 standard</option>
-                    <option value="5">5 x 5 - Modèle COSO / Aéronautique</option>
-                    <option value="10">10 x 10 - Précision Décimale Avancée</option>
+                    <option value="3">3 × 3 - Grille Simplifiée (3 Niveaux)</option>
+                    <option value="4">4 × 4 - Grille Standard IFACI (4 Niveaux)</option>
+                    <option value="5">5 × 5 - Grille Matrice COSO / ISO 31000 (5 Niveaux)</option>
+                    <option value="6">6 × 6 - Grille Avancée Granulaire (6 Niveaux)</option>
+                    <option value="7">7 × 7 - Grille Très Haute Résolution (7 Niveaux)</option>
+                    <option value="10">10 × 10 - Grille Décimale Précise (10 Niveaux)</option>
                   </select>
                 </div>
-                <p className="text-slate-400 text-[10px] leading-relaxed">
-                  Modifier la taille de la grille redimensionne dynamiquement les coordonnées du module Matrice ainsi que les calculs de cotations du Risque brut.
+                <p className="text-slate-500 text-[10.5px] leading-relaxed">
+                  Modifier la dimension de la grille (ex: 6x6) re-calcule automatiquement la matrice de criticité Heatmap ainsi que les échelles de cotation associées dans tous les tableaux de bord et modules.
                 </p>
               </div>
             </div>
