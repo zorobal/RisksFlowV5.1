@@ -347,14 +347,14 @@ export default function App() {
   const activeLicence = licences.find(l => l.entrepriseId === activeTenantId) || licences.find(l => l.entrepriseId === activeTenantConfig.id);
   
   const activeTenantRisks = risks.filter(r => {
-    if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1';
-    if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2';
-    return r.tenantId === activeTenantId;
+    if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1' || !r.tenantId;
+    if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2' || !r.tenantId;
+    return !r.tenantId || r.tenantId === activeTenantId || r.tenantId === activeEntreprise?.id;
   });
 
   const activeTenantActions = actions.filter(a => {
     if (activeTenantId === 'tenant1') return !a.tenantId || a.tenantId === 'tenant1';
-    return a.tenantId === activeTenantId || activeTenantRisks.some(r => r.id === a.riskId);
+    return !a.tenantId || a.tenantId === activeTenantId || a.tenantId === activeEntreprise?.id || activeTenantRisks.some(r => r.id === a.riskId);
   });
 
   const addAuditLog = (action: string, details: string) => {

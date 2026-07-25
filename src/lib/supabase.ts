@@ -344,89 +344,104 @@ CREATE POLICY "Allow all historique" ON historique_licences FOR ALL TO anon USIN
 `;
 };
 
+const safeJsonParse = (val: any, fallback: any) => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'object') return val;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch (e) {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
 // Map local object schema properties to Supabase column names
 const mapTenantToDb = (t: any) => ({
   id: t.id,
-  company_name: t.companyName,
-  logo_url: t.logoUrl || null,
-  scales: t.scales,
-  formula: t.formula,
-  matrix_size: t.matrixSize,
-  matrix_thresholds: t.matrixThresholds,
-  workflow_steps: t.workflowSteps,
-  categories: t.categories,
-  entities: t.entities,
+  company_name: t.companyName || t.company_name,
+  logo_url: t.logoUrl || t.logo_url || null,
+  scales: typeof t.scales === 'string' ? t.scales : JSON.stringify(t.scales || {}),
+  formula: typeof t.formula === 'string' ? t.formula : JSON.stringify(t.formula || {}),
+  matrix_size: t.matrixSize || t.matrix_size || 4,
+  matrix_thresholds: typeof t.matrixThresholds === 'string' ? t.matrixThresholds : JSON.stringify(t.matrixThresholds || t.matrix_thresholds || []),
+  workflow_steps: typeof t.workflowSteps === 'string' ? t.workflowSteps : JSON.stringify(t.workflowSteps || t.workflow_steps || []),
+  categories: typeof t.categories === 'string' ? t.categories : JSON.stringify(t.categories || []),
+  entities: typeof t.entities === 'string' ? t.entities : JSON.stringify(t.entities || []),
 });
 
 const mapTenantFromDb = (t: any) => ({
   id: t.id,
-  companyName: t.company_name,
-  logoUrl: t.logo_url,
-  scales: t.scales,
-  formula: t.formula,
-  matrixSize: t.matrix_size,
-  matrixThresholds: t.matrix_thresholds,
-  workflowSteps: t.workflow_steps,
-  categories: t.categories,
-  entities: t.entities,
+  companyName: t.company_name || t.companyName || '',
+  logoUrl: t.logo_url || t.logoUrl || undefined,
+  scales: safeJsonParse(t.scales, {}),
+  formula: safeJsonParse(t.formula, {}),
+  matrixSize: Number(t.matrix_size || t.matrixSize || 4),
+  matrixThresholds: safeJsonParse(t.matrix_thresholds || t.matrixThresholds, []),
+  workflowSteps: safeJsonParse(t.workflow_steps || t.workflowSteps, []),
+  categories: safeJsonParse(t.categories, []),
+  entities: safeJsonParse(t.entities, []),
 });
 
 const mapRiskToDb = (r: any) => ({
   id: r.id,
-  title: r.title,
-  description: r.description,
-  category_id: r.categoryId,
-  entity_id: r.entityId,
-  created_by: r.createdBy,
-  created_at: r.createdAt,
-  status_id: r.statusId,
-  frequency_value: r.frequencyValue,
-  impact_value: r.impactValue,
-  control_value: r.controlValue,
-  score_brut: r.scoreBrut,
-  score_residuel: r.scoreResiduel,
-  history: r.history,
+  title: r.title || '',
+  description: r.description || '',
+  category_id: r.categoryId || r.category_id || '',
+  entity_id: r.entityId || r.entity_id || '',
+  created_by: r.createdBy || r.created_by || '',
+  created_at: r.createdAt || r.created_at || new Date().toISOString(),
+  status_id: r.statusId || r.status_id || '',
+  frequency_value: Number(r.frequencyValue ?? r.frequency_value ?? 1),
+  impact_value: Number(r.impactValue ?? r.impact_value ?? 1),
+  control_value: Number(r.controlValue ?? r.control_value ?? 1),
+  score_brut: Number(r.scoreBrut ?? r.score_brut ?? 1),
+  score_residuel: Number(r.scoreResiduel ?? r.score_residuel ?? 1),
+  history: Array.isArray(r.history) ? r.history : safeJsonParse(r.history, []),
 });
 
 const mapRiskFromDb = (r: any) => ({
   id: r.id,
-  title: r.title,
-  description: r.description,
-  categoryId: r.category_id,
-  entityId: r.entity_id,
-  createdBy: r.created_by,
-  createdAt: r.created_at,
-  statusId: r.status_id,
-  frequencyValue: r.frequency_value,
-  impactValue: r.impact_value,
-  controlValue: r.control_value,
-  scoreBrut: r.score_brut,
-  scoreResiduel: r.score_residuel,
-  history: r.history,
+  title: r.title || '',
+  description: r.description || '',
+  categoryId: r.category_id || r.categoryId || '',
+  entityId: r.entity_id || r.entityId || '',
+  createdBy: r.created_by || r.createdBy || '',
+  createdAt: r.created_at || r.createdAt || '',
+  statusId: r.status_id || r.statusId || '',
+  tenantId: r.tenant_id || r.tenantId || (r.id?.startsWith('R-1') ? 'tenant1' : r.id?.startsWith('R-2') ? 'tenant2' : undefined),
+  frequencyValue: Number(r.frequency_value ?? r.frequencyValue ?? 1),
+  impactValue: Number(r.impact_value ?? r.impactValue ?? 1),
+  controlValue: Number(r.control_value ?? r.controlValue ?? 1),
+  scoreBrut: Number(r.score_brut ?? r.scoreBrut ?? 1),
+  scoreResiduel: Number(r.score_residuel ?? r.scoreResiduel ?? 1),
+  history: Array.isArray(r.history) ? r.history : safeJsonParse(r.history, []),
 });
 
 const mapActionToDb = (a: any) => ({
   id: a.id,
-  risk_id: a.riskId,
-  title: a.title,
-  description: a.description,
-  owner_name: a.ownerName,
-  due_date: a.dueDate,
-  priority: a.priority,
-  status: a.status,
-  progress: a.progress,
+  risk_id: a.riskId || a.risk_id || '',
+  title: a.title || '',
+  description: a.description || '',
+  owner_name: a.ownerName || a.owner_name || '',
+  due_date: a.dueDate || a.due_date || '',
+  priority: a.priority || 'Moyenne',
+  status: a.status || 'À planifier',
+  progress: Number(a.progress ?? 0),
 });
 
 const mapActionFromDb = (a: any) => ({
   id: a.id,
-  riskId: a.risk_id,
-  title: a.title,
-  description: a.description,
-  ownerName: a.owner_name,
-  dueDate: a.due_date,
-  priority: a.priority,
-  status: a.status,
-  progress: a.progress,
+  riskId: a.risk_id || a.riskId || '',
+  title: a.title || '',
+  description: a.description || '',
+  ownerName: a.owner_name || a.ownerName || '',
+  dueDate: a.due_date || a.dueDate || '',
+  priority: a.priority || 'Moyenne',
+  status: a.status || 'À planifier',
+  progress: Number(a.progress ?? 0),
+  tenantId: a.tenant_id || a.tenantId || undefined,
 });
 
 const mapAuditLogToDb = (l: any) => ({
