@@ -146,7 +146,16 @@ export default function App() {
           if (res.success && res.data) {
             const d = res.data;
             if (d.tenants?.length) setTenants(d.tenants);
-            if (d.users?.length) setUsers(d.users);
+            if (d.users?.length) {
+              // Ensure superadmin and preset accounts are available alongside database users
+              const mergedUsers = [...d.users];
+              PRESET_USERS.forEach(pu => {
+                if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
+                  mergedUsers.push(pu);
+                }
+              });
+              setUsers(mergedUsers);
+            }
             if (d.risks?.length) setRisks(d.risks);
             if (d.actions?.length) setActions(d.actions);
             if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
@@ -162,6 +171,13 @@ export default function App() {
             if (d.entreprises?.length) setEntreprises(d.entreprises);
             if (d.licences?.length) setLicences(d.licences);
             if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
+
+            // Cache fresh central database state in LocalStorage for fast offline display
+            try {
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(d));
+            } catch (e) {
+              console.error('[LocalStorage Sync Cache Error]', e);
+            }
           }
         } catch (error) {
           console.error('[Supabase Error] Échec de récupération BDD:', error);

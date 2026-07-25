@@ -751,11 +751,17 @@ export const pushAllToSupabase = async (
 export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ success: boolean; data: any; message: string }> => {
   try {
     const pullTable = async (tableName: string) => {
-      const { data, error } = await client.from(tableName).select('*');
-      if (error) {
-        throw new Error(`Échec de lecture sur "${tableName}" : ${error.message}`);
+      try {
+        const { data, error } = await client.from(tableName).select('*');
+        if (error) {
+          console.warn(`[Supabase Pull Warning] Table "${tableName}":`, error.message);
+          return [];
+        }
+        return data || [];
+      } catch (err) {
+        console.warn(`[Supabase Pull Exception] Table "${tableName}":`, err);
+        return [];
       }
-      return data || [];
     };
 
     const tenantsRaw = await pullTable('tenants');
@@ -799,7 +805,7 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
     return {
       success: true,
       data: mappedData,
-      message: 'Données récupérées avec succès depuis Supabase !',
+      message: 'Données récupérées avec succès depuis la base de données centrale Supabase !',
     };
   } catch (error: any) {
     console.error('Failed to pull from Supabase:', error);
