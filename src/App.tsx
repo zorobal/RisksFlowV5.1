@@ -18,6 +18,8 @@ import ComplianceModule from './components/ComplianceModule';
 import SuperAdminModule from './components/SuperAdminModule';
 import LoginModule from './components/LoginModule';
 import DemoModule from './components/DemoModule';
+import { generateScalesForSize } from './components/ConfigModule';
+import { generateDefaultThresholds } from './utils/riskUtils';
 import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase } from './lib/supabase';
 
 import { 
@@ -193,8 +195,52 @@ export default function App() {
     });
   }, [users, tenants]);
 
-  // Configurations actives
-  const activeTenantConfig = tenants.find(t => t.id === activeTenantId) || tenants[0];
+  // Configurations actives avec recherche et fallback dynamique
+  const activeTenantConfig = React.useMemo(() => {
+    const found = tenants.find(t => t.id === activeTenantId);
+    if (found) return found;
+
+    // Check if an entreprise entry exists with this activeTenantId
+    const ent = entreprises.find(e => e.id === activeTenantId);
+    if (ent) {
+      const fallbackConfig: TenantConfig = {
+        id: ent.id,
+        companyName: ent.nomComplet || ent.raisonSociale || 'Entreprise Cliente',
+        logoUrl: ent.logoUrl || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80',
+        matrixSize: 3,
+        scales: generateScalesForSize(3),
+        formula: {
+          id: 'f1',
+          name: 'Formule IFACI Standard',
+          expression: 'P * I * M',
+          variables: [
+            { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 3 },
+            { name: 'I', label: 'Impact', min: 1, max: 3 },
+            { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 3 }
+          ],
+          description: 'Calcul par produit de la fréquence et de l\'impact.'
+        },
+        matrixThresholds: generateDefaultThresholds(3, 4),
+        workflowSteps: [
+          { id: 'w_brouillon', name: '📊 Brouillon', color: 'bg-gray-100 text-gray-800', order: 1 },
+          { id: 'w_evaluation', name: '🔍 Évaluation en cours', color: 'bg-blue-100 text-blue-800', order: 2 },
+          { id: 'w_validation', name: '⏳ Validation Responsable', color: 'bg-amber-100 text-amber-800', order: 3 },
+          { id: 'w_approuve', name: '✅ Approuvé GRC', color: 'bg-green-100 text-green-800', order: 4 },
+        ],
+        categories: [
+          { id: 'cat_finance', name: 'Risques Financiers', color: '#3b82f6', description: 'Pertes de chiffre d\'affaires, fraudes.' },
+          { id: 'cat_operational', name: 'Risques Opérationnels', color: '#10b981', description: 'Pannes matérielles, logistique.' },
+          { id: 'cat_it', name: 'Risques SI & Cybersécurité', color: '#8b5cf6', description: 'Piratages, fuites de données.' },
+        ],
+        entities: [
+          { id: `e_${ent.id}_DG`, name: `Direction Générale (${ent.raisonSociale || ent.nomComplet})`, type: 'Direction' }
+        ]
+      };
+      return fallbackConfig;
+    }
+
+    return tenants[0] || SOGESTI_CONFIG;
+  }, [tenants, entreprises, activeTenantId]);
   const activeEntreprise = entreprises.find(e => e.id === activeTenantId) || entreprises.find(e => e.id === activeTenantConfig.id);
   const activeLicence = licences.find(l => l.entrepriseId === activeTenantId) || licences.find(l => l.entrepriseId === activeTenantConfig.id);
   

@@ -31,6 +31,7 @@ import html2canvas from 'html2canvas';
 import { Risk, TenantConfig, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 
 interface MatrixModuleProps {
   risks: Risk[];
@@ -78,8 +79,7 @@ export default function MatrixModule({
   });
 
   const getCriticality = (score: number) => {
-    const found = tenantConfig.matrixThresholds.find(t => score >= t.minScore && score <= t.maxScore);
-    return found || tenantConfig.matrixThresholds[0];
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
   };
 
   // Matrix sizes from 3 to 10
@@ -137,45 +137,20 @@ export default function MatrixModule({
   };
 
   const getCellClassNameForBrut = (f: number, i: number) => {
-    const product = f * i;
-    const ratio = size === 4 ? (16 / 64) : (25 / 25);
-    const scoreVal = product / ratio;
+    const scoreVal = f * i;
     const crit = getCriticality(scoreVal);
-    const labelLower = crit.label.toLowerCase();
-    
-    if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas')) {
-      return 'bg-emerald-50 hover:bg-emerald-100 text-emerald-850 border-emerald-200';
-    }
-    if (labelLower.includes('modéré') || labelLower.includes('moyen')) {
-      return 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200';
-    }
-    if (labelLower.includes('significatif') || labelLower.includes('critique')) {
-      return 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-orange-200';
-    }
-    return 'bg-rose-50 hover:bg-rose-100 text-rose-900 border-rose-200';
+    return `${crit.color} border transition hover:brightness-95 cursor-pointer`;
   };
 
   const getCellClassNameForNet = (brutMin: number, controlVal: number) => {
-    const midBrut = brutMin; 
-    let netScore = midBrut * controlVal;
+    let netScore = brutMin * controlVal;
     
     if (tenantConfig.formula.expression === '(P * I) - M') {
-      netScore = Math.max(0, midBrut - controlVal);
+      netScore = Math.max(0, brutMin - controlVal);
     }
 
     const crit = getCriticality(netScore);
-    const labelLower = crit.label.toLowerCase();
-
-    if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas')) {
-      return 'bg-emerald-50 hover:bg-emerald-100 text-emerald-850 border-emerald-200';
-    }
-    if (labelLower.includes('modéré') || labelLower.includes('moyen')) {
-      return 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200';
-    }
-    if (labelLower.includes('significatif') || labelLower.includes('critique')) {
-      return 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-orange-200';
-    }
-    return 'bg-rose-50 hover:bg-rose-100 text-rose-900 border-rose-200';
+    return `${crit.color} border transition hover:brightness-95 cursor-pointer`;
   };
 
   // Risks inside a selected Brut Cell

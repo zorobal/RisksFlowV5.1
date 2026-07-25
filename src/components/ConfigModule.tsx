@@ -37,6 +37,7 @@ import {
   X
 } from 'lucide-react';
 import { getDescendantEntityIds } from '../utils/orgUtils';
+import { getCriticalityFromThresholds, generateDefaultThresholds, COLOR_PRESETS } from '../utils/riskUtils';
 
 export function generateScalesForSize(size: number): {
   frequency: ScaleItem[];
@@ -143,7 +144,8 @@ import {
   Rule, 
   AccessProfile,
   User as GrcUser,
-  Role
+  Role,
+  MatrixThreshold
 } from '../types';
 interface ConfigModuleProps {
   tenantConfig: TenantConfig;
@@ -197,7 +199,7 @@ export default function ConfigModule({
   succursalesActives = true
 }: ConfigModuleProps) {
   // Config Modules Sub-tab switcher
-  const [activeTab, setActiveTab] = useState<'org' | 'functions' | 'rules' | 'scales' | 'formula' | 'categories' | 'workflow' | 'rights' | 'formbuilder'>('org');
+  const [activeTab, setActiveTab] = useState<'org' | 'functions' | 'rules' | 'scales' | 'formula' | 'thresholds' | 'categories' | 'workflow' | 'rights' | 'formbuilder'>('org');
 
   // Form Builder No-Code State
   const [customFields, setCustomFields] = useState<{
@@ -1010,6 +1012,68 @@ export default function ConfigModule({
     onAddLog('Config Moteur', `Dimension de la matrice de criticité mise à jour à ${newSize}×${newSize} et échelles de cotation (P, I, M) ré-étalonnées de 1 à ${newSize}.`);
   };
 
+  const handleUpdateThresholdItem = (index: number, updatedItem: MatrixThreshold) => {
+    const newThresholds = [...tenantConfig.matrixThresholds];
+    newThresholds[index] = updatedItem;
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      matrixThresholds: newThresholds
+    });
+    onAddLog('Config Moteur', `Seuil de criticité "${updatedItem.label}" mis à jour (${updatedItem.minScore} - ${updatedItem.maxScore}).`);
+  };
+
+  const handleAddThresholdItem = () => {
+    const currentList = tenantConfig.matrixThresholds || [];
+    const last = currentList[currentList.length - 1];
+    const newMin = last ? Math.round((last.maxScore + 1) * 10) / 10 : 1;
+    const newMax = newMin + 2;
+    const newItem: MatrixThreshold = {
+      label: `Niveau ${currentList.length + 1}`,
+      minScore: newMin,
+      maxScore: newMax,
+      color: COLOR_PRESETS[currentList.length % COLOR_PRESETS.length].colorClass,
+      textColor: COLOR_PRESETS[currentList.length % COLOR_PRESETS.length].textColor,
+      description: 'Nouveau niveau de graduation.'
+    };
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      matrixThresholds: [...currentList, newItem]
+    });
+    onAddLog('Config Moteur', `Ajout d'un niveau de graduation supplémentaire.`);
+  };
+
+  const handleRemoveThresholdItem = (index: number) => {
+    if (tenantConfig.matrixThresholds.length <= 2) return;
+    const newThresholds = tenantConfig.matrixThresholds.filter((_, i) => i !== index);
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      matrixThresholds: newThresholds
+    });
+    onAddLog('Config Moteur', `Suppression d'un niveau de graduation de criticité.`);
+  };
+
+  const handleMoveThresholdItem = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= tenantConfig.matrixThresholds.length) return;
+    const newThresholds = [...tenantConfig.matrixThresholds];
+    const temp = newThresholds[index];
+    newThresholds[index] = newThresholds[targetIndex];
+    newThresholds[targetIndex] = temp;
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      matrixThresholds: newThresholds
+    });
+  };
+
+  const handleGeneratePresetThresholds = (numLevels: number) => {
+    const generated = generateDefaultThresholds(tenantConfig.matrixSize, numLevels);
+    onUpdateTenantConfig({
+      ...tenantConfig,
+      matrixThresholds: generated
+    });
+    onAddLog('Config Moteur', `Génération automatique d'une graduation en ${numLevels} niveaux pour la matrice ${tenantConfig.matrixSize}×${tenantConfig.matrixSize}.`);
+  };
+
   // Indented helper to display nested structure
   const renderIndentedOrg = (parentId: string | undefined, depth: number = 0): React.ReactNode => {
     const children = tenantConfig.entities.filter(e => e.parentId === parentId && e.statut !== 'Archivé');
@@ -1182,6 +1246,16 @@ export default function ConfigModule({
           >
             <Boxes className="w-4 h-4 text-indigo-600" />
             <span>Formule de Calcul GRC</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('thresholds')}
+            className={`w-full flex items-center space-x-2 px-3 py-2.5 rounded font-bold transition text-left ${
+              activeTab === 'thresholds' ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50 text-slate-600'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-indigo-600" />
+            <span>Graduation & Seuils de Criticité</span>
           </button>
 
           <button
@@ -1864,7 +1938,13 @@ export default function ConfigModule({
                           return (
                             <tr key={u.id} className="hover:bg-slate-50/50">
                               <td className="py-2.5 px-3 font-semibold text-slate-800 flex items-center gap-2">
-                                <img src={u.avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80`} alt="" className="w-5 h-5 rounded-full shrink-0" />
+                                {u.avatar ? (
+                                  <img src={u.avatar} alt="" className="w-5 h-5 rounded-full shrink-0 object-cover border border-slate-200" />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[9px] shrink-0 border border-indigo-200">
+                                    {u.name.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
                                 {u.name}
                               </td>
                               <td className="py-2.5 px-3 font-mono text-slate-500">{u.email}</td>
@@ -3242,6 +3322,282 @@ export default function ConfigModule({
                 <p className="text-slate-500 text-[10.5px] leading-relaxed">
                   Modifier la dimension de la grille (ex: 6x6) re-calcule automatiquement la matrice de criticité Heatmap ainsi que les échelles de cotation associées dans tous les tableaux de bord et modules.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3.5: GRADUATION & MATRIX THRESHOLDS */}
+          {activeTab === 'thresholds' && (
+            <div className="space-y-6 text-left">
+              <div className="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-indigo-600" />
+                    Paramétrage de la Graduation & des Seuils de Criticité
+                  </h3>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Définissez le nombre de niveaux de gravité (ex: 3, 4, 5 ou 6 niveaux), les plages de criticité (score min / max), les couleurs d'affichage et les consignes de traitement.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 font-bold text-xs">Matrice active :</span>
+                  <span className="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-md font-extrabold text-xs border border-indigo-200">
+                    {tenantConfig.matrixSize} × {tenantConfig.matrixSize} (Score Max : {tenantConfig.matrixSize * tenantConfig.matrixSize})
+                  </span>
+                </div>
+              </div>
+
+              {/* Preset Graduation Generator Header */}
+              <div className="p-4 bg-gradient-to-r from-indigo-50/80 to-slate-50 rounded-xl border border-indigo-100 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Wrench className="w-3.5 h-3.5 text-indigo-600" />
+                      Générateur Rapide de Graduation (Nombre de Niveaux)
+                    </h4>
+                    <p className="text-slate-500 text-[10.5px]">
+                      Sélectionnez une graduation standard pour rééchelonner automatiquement les plages de score de la matrice {tenantConfig.matrixSize}×{tenantConfig.matrixSize}.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[3, 4, 5, 6].map(num => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleGeneratePresetThresholds(num)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer ${
+                          tenantConfig.matrixThresholds.length === num
+                            ? 'bg-indigo-600 text-white shadow-indigo-200'
+                            : 'bg-white text-slate-700 hover:bg-indigo-50 border border-slate-200'
+                        }`}
+                      >
+                        Graduation {num} Niveaux
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Thresholds Table */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                    Tableau des Seuils de Criticité Personnalisables ({tenantConfig.matrixThresholds.length} Niveaux Définis)
+                  </h4>
+
+                  <button
+                    type="button"
+                    onClick={handleAddThresholdItem}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Ajouter un Niveau de Graduation
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 uppercase font-extrabold text-[10px]">
+                        <tr>
+                          <th className="p-3 w-12 text-center">Niveau</th>
+                          <th className="p-3">Intitulé / Nomination</th>
+                          <th className="p-3 w-28">Score Min</th>
+                          <th className="p-3 w-28">Score Max</th>
+                          <th className="p-3 w-48">Couleur & Thème</th>
+                          <th className="p-3">Consigne / Description</th>
+                          <th className="p-3 w-20 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {tenantConfig.matrixThresholds.map((t, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/80 transition">
+                            {/* Niveau */}
+                            <td className="p-3 text-center">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-800 font-extrabold text-xs">
+                                {idx + 1}
+                              </span>
+                            </td>
+
+                            {/* Nomination */}
+                            <td className="p-3">
+                              <input
+                                type="text"
+                                value={t.label}
+                                onChange={(e) => handleUpdateThresholdItem(idx, { ...t, label: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded p-1.5 font-bold text-slate-900 text-xs"
+                                placeholder="Ex: Faible, Modéré..."
+                              />
+                            </td>
+
+                            {/* Min Score */}
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={t.minScore}
+                                onChange={(e) => handleUpdateThresholdItem(idx, { ...t, minScore: Number(e.target.value) })}
+                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded p-1.5 font-mono text-center font-bold text-xs"
+                              />
+                            </td>
+
+                            {/* Max Score */}
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={t.maxScore}
+                                onChange={(e) => handleUpdateThresholdItem(idx, { ...t, maxScore: Number(e.target.value) })}
+                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded p-1.5 font-mono text-center font-bold text-xs"
+                              />
+                            </td>
+
+                            {/* Color Preset Selector */}
+                            <td className="p-3">
+                              <select
+                                value={COLOR_PRESETS.find(p => p.colorClass === t.color)?.id || 'custom'}
+                                onChange={(e) => {
+                                  const preset = COLOR_PRESETS.find(p => p.id === e.target.value);
+                                  if (preset) {
+                                    handleUpdateThresholdItem(idx, {
+                                      ...t,
+                                      color: preset.colorClass,
+                                      textColor: preset.textColor
+                                    });
+                                  }
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 font-medium text-xs text-slate-800 cursor-pointer"
+                              >
+                                {COLOR_PRESETS.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${t.color}`}>
+                                  {t.label || 'Aperçu'}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Description */}
+                            <td className="p-3">
+                              <input
+                                type="text"
+                                value={t.description || ''}
+                                onChange={(e) => handleUpdateThresholdItem(idx, { ...t, description: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 rounded p-1.5 text-slate-600 text-[11px]"
+                                placeholder="Consigne d'action pour ce niveau..."
+                              />
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveThresholdItem(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-30 cursor-pointer"
+                                  title="Monter"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveThresholdItem(idx, 'down')}
+                                  disabled={idx === tenantConfig.matrixThresholds.length - 1}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-30 cursor-pointer"
+                                  title="Descendre"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveThresholdItem(idx)}
+                                  disabled={tenantConfig.matrixThresholds.length <= 2}
+                                  className="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30 cursor-pointer"
+                                  title="Supprimer ce niveau"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Heatmap Preview Grid */}
+              <div className="p-5 bg-white border border-slate-200 rounded-xl space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-600" />
+                    Aperçu Dynamique de la Matrice {tenantConfig.matrixSize}×{tenantConfig.matrixSize} avec la Graduation Active
+                  </h4>
+                  <span className="text-[10px] text-slate-400 italic">
+                    Chaque case (F × I) applique la couleur définie par les seuils
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-4 bg-slate-50/50 rounded-lg">
+                  {/* Grid render */}
+                  <div className="inline-block border border-slate-300 rounded-lg p-3 bg-white shadow-2xs">
+                    <div className="text-center font-extrabold text-slate-700 text-[11px] mb-2 uppercase">
+                      Axe Y : Fréquence (1 à {tenantConfig.matrixSize}) × Axe X : Impact (1 à {tenantConfig.matrixSize})
+                    </div>
+
+                    <div
+                      className="grid gap-1.5"
+                      style={{
+                        gridTemplateColumns: `repeat(${tenantConfig.matrixSize}, minmax(48px, 1fr))`
+                      }}
+                    >
+                      {Array.from({ length: tenantConfig.matrixSize }, (_, rowIdx) => {
+                        const f = tenantConfig.matrixSize - rowIdx; // Y axis top to bottom
+                        return Array.from({ length: tenantConfig.matrixSize }, (_, colIdx) => {
+                          const i = colIdx + 1; // X axis left to right
+                          const product = f * i;
+                          const thresh = getCriticalityFromThresholds(product, tenantConfig.matrixThresholds);
+
+                          return (
+                            <div
+                              key={`${f}-${i}`}
+                              className={`h-11 flex flex-col items-center justify-center rounded-md border font-extrabold transition shadow-2xs ${thresh.color}`}
+                              title={`Fréquence ${f} × Impact ${i} = ${product} (${thresh.label})`}
+                            >
+                              <span className="text-xs">{product}</span>
+                              <span className="text-[8px] opacity-80 uppercase font-bold truncate max-w-[42px]">
+                                {thresh.label}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Legend bar */}
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                    {tenantConfig.matrixThresholds.map((t, idx) => (
+                      <div key={idx} className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 ${t.color}`}>
+                        <span className="w-2 h-2 rounded-full bg-current opacity-80"></span>
+                        <span>{t.label}</span>
+                        <span className="font-mono text-[10px] opacity-75">
+                          [{t.minScore} - {t.maxScore}]
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}

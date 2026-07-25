@@ -26,6 +26,7 @@ import {
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 
 interface RiskMappingModuleProps {
   risks: Risk[];
@@ -116,11 +117,7 @@ export default function RiskMappingModule({
   });
 
   const getCriticality = (score: number) => {
-    if (!matrixThresholds || matrixThresholds.length === 0) {
-      return { level: 'Indéfini', color: '#e2e8f0', textColor: '#1e293b', label: 'Indéfini', minScore: 0, maxScore: 25 };
-    }
-    const found = matrixThresholds.find(t => score >= t.minScore && score <= t.maxScore);
-    return found || matrixThresholds[0] || { level: 'Indéfini', color: '#e2e8f0', textColor: '#1e293b', label: 'Indéfini', minScore: 0, maxScore: 25 };
+    return getCriticalityFromThresholds(score, matrixThresholds);
   };
 
   const handleOpenEdit = (risk: Risk) => {

@@ -15,6 +15,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { Risk, TenantConfig } from '../types';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 
 interface EvaluationModuleProps {
   risks: Risk[];
@@ -55,8 +56,7 @@ export default function EvaluationModule({
     : (scoreBrutSim * simControl);
 
   const getCritForScore = (score: number) => {
-    const found = tenantConfig.matrixThresholds.find(t => score >= t.minScore && score <= t.maxScore);
-    return found || tenantConfig.matrixThresholds[0];
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
   };
 
   const currentCritSim = getCritForScore(scoreResiduelSim);

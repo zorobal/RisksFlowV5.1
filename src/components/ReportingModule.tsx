@@ -15,6 +15,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan } from '../types';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 
 interface ReportingModuleProps {
   risks: Risk[];
@@ -41,8 +42,7 @@ export default function ReportingModule({
     : 0;
 
   const getCriticality = (score: number) => {
-    const found = tenantConfig.matrixThresholds.find(t => score >= t.minScore && score <= t.maxScore);
-    return found || tenantConfig.matrixThresholds[0];
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
   };
 
   const highRisksCount = risks.filter(r => {

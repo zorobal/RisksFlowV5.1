@@ -25,6 +25,7 @@ import {
   ListFilter
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
@@ -213,8 +214,7 @@ export default function DashboardModule({
 
   // Helper to categorize criticality
   const getCriticality = (score: number) => {
-    const found = tenantConfig.matrixThresholds.find(t => score >= t.minScore && score <= t.maxScore);
-    return found || tenantConfig.matrixThresholds[0];
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
   };
 
   const criticalRisksCount = useMemo(() => {

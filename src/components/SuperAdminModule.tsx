@@ -637,7 +637,7 @@ export default function SuperAdminModule({
       role: newClientUserRole,
       password: newClientUserPassword,
       tenantId: newClientUserTenant,
-      avatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 900000)}?w=80&fit=crop&q=80`
+      avatar: undefined
     };
 
     onUpdateUsers(prev => [...prev, newUser]);
@@ -2294,7 +2294,13 @@ export default function SuperAdminModule({
                         return (
                           <tr key={u.id} className="hover:bg-slate-850/30">
                             <td className="py-3 font-semibold text-white flex items-center space-x-2">
-                              <img src={u.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&fit=crop&q=80"} className="w-5 h-5 rounded-full border border-slate-800 shrink-0" />
+                              {u.avatar ? (
+                                <img src={u.avatar} className="w-5 h-5 rounded-full border border-slate-800 shrink-0 object-cover" alt="" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-slate-700 text-slate-200 font-bold flex items-center justify-center text-[9px] border border-slate-600 shrink-0">
+                                  {u.name.substring(0, 2).toUpperCase()}
+                                </div>
+                              )}
                               <span>{u.name}</span>
                             </td>
                             <td className="py-3 font-mono text-slate-300">{u.email}</td>
