@@ -201,6 +201,15 @@ export default function ConfigModule({
   // Config Modules Sub-tab switcher
   const [activeTab, setActiveTab] = useState<'org' | 'functions' | 'rules' | 'scales' | 'formula' | 'thresholds' | 'categories' | 'workflow' | 'rights' | 'formbuilder'>('org');
 
+  // Selected Graduation Preset Tab (3, 4, 5, 6...)
+  const [selectedGraduationTab, setSelectedGraduationTab] = useState<number>(() => tenantConfig.matrixThresholds?.length || 3);
+
+  useEffect(() => {
+    if (tenantConfig?.matrixThresholds?.length) {
+      setSelectedGraduationTab(tenantConfig.matrixThresholds.length);
+    }
+  }, [tenantConfig.id]);
+
   // Form Builder No-Code State
   const [customFields, setCustomFields] = useState<{
     id: string;
@@ -1066,6 +1075,7 @@ export default function ConfigModule({
   };
 
   const handleGeneratePresetThresholds = (numLevels: number) => {
+    setSelectedGraduationTab(numLevels);
     const generated = generateDefaultThresholds(tenantConfig.matrixSize, numLevels);
     onUpdateTenantConfig({
       ...tenantConfig,
@@ -3368,7 +3378,7 @@ export default function ConfigModule({
                         type="button"
                         onClick={() => handleGeneratePresetThresholds(num)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer ${
-                          tenantConfig.matrixThresholds.length === num
+                          selectedGraduationTab === num
                             ? 'bg-indigo-600 text-white shadow-indigo-200'
                             : 'bg-white text-slate-700 hover:bg-indigo-50 border border-slate-200'
                         }`}
