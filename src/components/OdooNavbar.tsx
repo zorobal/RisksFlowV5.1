@@ -24,7 +24,10 @@ import {
   Award,
   Camera,
   Trash2,
-  User as UserIcon
+  User as UserIcon,
+  Save,
+  Database,
+  Check
 } from 'lucide-react';
 import { TenantConfig, User } from '../types';
 
@@ -43,6 +46,8 @@ interface OdooNavbarProps {
   isSuperAdminMode: boolean;
   onToggleSuperAdminMode: (active: boolean) => void;
   onLogout?: () => void;
+  onSaveData?: () => void;
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }
 
 const getInitials = (name: string) => {
@@ -66,7 +71,9 @@ export default function OdooNavbar({
   onAddLog,
   isSuperAdminMode,
   onToggleSuperAdminMode,
-  onLogout
+  onLogout,
+  onSaveData,
+  saveStatus = 'idle'
 }: OdooNavbarProps) {
   const [showAppsMenu, setShowAppsMenu] = useState(false);
   const [showTenantMenu, setShowTenantMenu] = useState(false);
@@ -239,8 +246,40 @@ export default function OdooNavbar({
           <span className="text-[10px] bg-white/20 px-1 rounded text-white/80">CTRL K</span>
         </div>
 
-        {/* Right Side: Tenant Picker, Notifications, User */}
-        <div className="flex items-center space-x-4">
+        {/* Right Side: Save Button, Tenant Picker, Notifications, User */}
+        <div className="flex items-center space-x-3">
+          {/* Immediate BDD Save Button */}
+          {onSaveData && (
+            <button
+              onClick={onSaveData}
+              disabled={saveStatus === 'saving'}
+              className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all shadow-sm border cursor-pointer ${
+                saveStatus === 'saved'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                  : saveStatus === 'saving'
+                  ? 'bg-amber-600 text-white border-amber-500 animate-pulse cursor-wait'
+                  : saveStatus === 'error'
+                  ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 hover:shadow-md'
+              }`}
+              title="Cliquer pour sauvegarder immédiatement toutes les données et configurations en base de données"
+            >
+              {saveStatus === 'saving' ? (
+                <Database className="w-3.5 h-3.5 animate-spin" />
+              ) : saveStatus === 'saved' ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {saveStatus === 'saving'
+                  ? 'Sauvegarde...'
+                  : saveStatus === 'saved'
+                  ? 'Enregistré !'
+                  : 'Sauvegarder en BDD'}
+              </span>
+            </button>
+          )}
           {/* Toggle button for SuperAdmin Platform mode (Only visible when already in SuperAdminMode to switch back) */}
           {isSuperAdminMode && false && (
             <button

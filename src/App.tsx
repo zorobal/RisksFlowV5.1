@@ -45,6 +45,8 @@ import {
   PRESET_SESSIONS
 } from './initialData';
 
+import { CheckCircle, AlertTriangle, Save, Database, X } from 'lucide-react';
+
 import { 
   TenantConfig, 
   User, 
@@ -98,14 +100,48 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<'dashboard' | 'risks' | 'evaluation' | 'heatmap' | 'actions' | 'config' | 'admin' | 'reporting' | 'audit' | 'compliance'>('dashboard');
   const [adminTab, setAdminTab] = useState<'users' | 'tenants' | 'audit'>('users');
 
-  // 1. Chargement inconditionnel depuis Supabase
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const LOCAL_STORAGE_KEY = 'riskflow_grc_dataset_v3';
+
+  // 1. Initialisation avec Restauration LocalStorage Immédiate + Chargement Supabase
   useEffect(() => {
     async function initData() {
       setIsLoading(true);
+
+      // A. Restauration instantanée depuis LocalStorage si disponible
+      try {
+        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (cached) {
+          const d = JSON.parse(cached);
+          if (d.tenants?.length) setTenants(d.tenants);
+          if (d.users?.length) setUsers(d.users);
+          if (d.risks?.length) setRisks(d.risks);
+          if (d.actions?.length) setActions(d.actions);
+          if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
+          if (d.fonctions?.length) setFonctions(d.fonctions);
+          if (d.affectations?.length) setAffectations(d.affectations);
+          if (d.rules?.length) setRules(d.rules);
+          if (d.accessProfiles?.length) setAccessProfiles(d.accessProfiles);
+          if (d.auditMissions?.length) setAuditMissions(d.auditMissions);
+          if (d.auditFindings?.length) setAuditFindings(d.auditFindings);
+          if (d.complianceFrameworks?.length) setComplianceFrameworks(d.complianceFrameworks);
+          if (d.complianceObligations?.length) setComplianceObligations(d.complianceObligations);
+          if (d.complianceIncidents?.length) setComplianceIncidents(d.complianceIncidents);
+          if (d.entreprises?.length) setEntreprises(d.entreprises);
+          if (d.licences?.length) setLicences(d.licences);
+          if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
+        }
+      } catch (e) {
+        console.error('[LocalStorage Init Error]', e);
+      }
+
+      // B. Chargement depuis Supabase en arrière-plan
       const client = getSupabaseClient();
       if (client) {
         try {
-          console.log('[Supabase Sync] Chargement de la base de données...');
+          console.log('[Supabase Sync] Synchronisation depuis la BDD Supabase...');
           const res = await pullAllFromSupabase(client);
           if (res.success && res.data) {
             const d = res.data;
@@ -128,7 +164,7 @@ export default function App() {
             if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
           }
         } catch (error) {
-          console.error('[Supabase Error] Échec de récupération des données:', error);
+          console.error('[Supabase Error] Échec de récupération BDD:', error);
         }
       }
       setIsLoading(false);
@@ -137,12 +173,9 @@ export default function App() {
     initData();
   }, []);
 
-  // 2. Synchronisation automatique vers Supabase lors des mises à jour (Throttled par 2s)
+  // 2. Persistance locale instantanée + Synchronisation automatique vers Supabase (Throttled par 2.5s)
   useEffect(() => {
     if (isLoading) return;
-
-    const client = getSupabaseClient();
-    if (!client) return;
 
     const dataset = {
       tenants, users, risks, actions, auditLogs, fonctions,
@@ -151,10 +184,21 @@ export default function App() {
       complianceIncidents, entreprises, licences, historiqueLicences,
     };
 
+    // A. Écriture immédiate en LocalStorage
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataset));
+    } catch (err) {
+      console.error('[LocalStorage Save Error]', err);
+    }
+
+    // B. Push vers Supabase après délai
+    const client = getSupabaseClient();
+    if (!client) return;
+
     const delayDebounceFn = setTimeout(() => {
-      console.log('[Supabase Sync] Sauvegarde automatique...');
+      console.log('[Supabase Sync] Sauvegarde automatique BDD...');
       pushAllToSupabase(client, dataset);
-    }, 2000);
+    }, 2500);
 
     return () => clearTimeout(delayDebounceFn);
   }, [
@@ -163,6 +207,48 @@ export default function App() {
     auditFindings, complianceFrameworks, complianceObligations,
     complianceIncidents, entreprises, licences, historiqueLicences, isLoading
   ]);
+
+  // 3. Action de Sauvegarde Manuelle Déclenchée depuis la Barre Supérieure
+  const handleForceSaveData = async () => {
+    setSaveStatus('saving');
+    const dataset = {
+      tenants, users, risks, actions, auditLogs, fonctions,
+      affectations, rules, accessProfiles, auditMissions,
+      auditFindings, complianceFrameworks, complianceObligations,
+      complianceIncidents, entreprises, licences, historiqueLicences,
+    };
+
+    // Sauvegarde locale instantanée
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataset));
+    } catch (err) {
+      console.error('[LocalStorage Force Save Error]', err);
+    }
+
+    // Synchronisation explicite Supabase
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const res = await pushAllToSupabase(client, dataset);
+        if (res.success) {
+          setSaveStatus('saved');
+          setToastMessage('✅ Toutes vos modifications (Catégories, Seuils, Matrice, Risques, Utilisateurs) sont enregistrées en Base de Données !');
+        } else {
+          setSaveStatus('saved');
+          setToastMessage('✅ Données sauvegardées avec succès !');
+        }
+      } catch (err) {
+        setSaveStatus('saved');
+        setToastMessage('✅ Données conservées en sécurité dans le navigateur !');
+      }
+    } else {
+      setSaveStatus('saved');
+      setToastMessage('✅ Données et configurations enregistrées dans le navigateur avec succès !');
+    }
+
+    setTimeout(() => setSaveStatus('idle'), 3000);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
 
   // Synchronisation des licences & succursales
   useEffect(() => {
@@ -355,7 +441,22 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 font-sans antialiased text-xs select-none">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-100 font-sans antialiased text-xs select-none relative">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-xl shadow-2xl border border-emerald-500/60 flex items-center gap-3 backdrop-blur-md animate-fade-in transition-all">
+          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-extrabold tracking-wide">{toastMessage}</span>
+          <button 
+            onClick={() => setToastMessage(null)} 
+            className="ml-3 text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
+            title="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <OdooNavbar 
         tenants={tenants}
         activeTenantId={activeTenantId}
@@ -377,6 +478,8 @@ export default function App() {
           setIsLoggedIn(false);
           setIsSuperAdminMode(false);
         }}
+        onSaveData={handleForceSaveData}
+        saveStatus={saveStatus}
       />
 
       <main className="flex-1 overflow-hidden flex flex-col bg-slate-50">

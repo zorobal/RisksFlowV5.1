@@ -28,10 +28,10 @@ import {
   AlertCircle
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { Risk, TenantConfig, ActionPlan } from '../types';
+import { Risk, TenantConfig, ActionPlan, MatrixThreshold } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
-import { getCriticalityFromThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, COLOR_PRESETS } from '../utils/riskUtils';
 
 interface MatrixModuleProps {
   risks: Risk[];
@@ -111,29 +111,42 @@ export default function MatrixModule({
   const brutBrackets = getBrutBrackets();
   const controlValues = Array.from({ length: size === 5 ? 5 : 4 }, (_, i) => i + 1);
 
-  // Vibrant aesthetic matching the attached image
+  // Dynamic color resolution matching customizable tenantConfig.matrixThresholds
+  const getThresholdStyle = (crit: MatrixThreshold) => {
+    const preset = COLOR_PRESETS.find(p => p.colorClass === crit.color || p.textColor === crit.textColor);
+    let bg = preset?.bgColorHex || '#f1f5f9';
+    let text = crit.textColor || preset?.textColor || '#1e293b';
+    let border = crit.textColor || '#cbd5e1';
+
+    if (crit.color) {
+      if (crit.color.includes('emerald')) { bg = '#dcfce7'; text = '#065f46'; border = '#a7f3d0'; }
+      else if (crit.color.includes('lime')) { bg = '#ecfccb'; text = '#3f6212'; border = '#bef264'; }
+      else if (crit.color.includes('amber')) { bg = '#fef3c7'; text = '#92400e'; border = '#fde68a'; }
+      else if (crit.color.includes('orange')) { bg = '#ffedd5'; text = '#9a3412'; border = '#fed7aa'; }
+      else if (crit.color.includes('red')) { bg = '#fee2e2'; text = '#991b1b'; border = '#fca5a5'; }
+      else if (crit.color.includes('purple')) { bg = '#f3e8ff'; text = '#6b21a8'; border = '#e9d5ff'; }
+      else if (crit.color.includes('rose')) { bg = '#ffe4e6'; text = '#9f1239'; border = '#fecdd3'; }
+      else if (crit.color.includes('sky')) { bg = '#e0f2fe'; text = '#075985'; border = '#bae6fd'; }
+      else if (crit.color.includes('slate')) { bg = '#f1f5f9'; text = '#334155'; border = '#cbd5e1'; }
+    }
+
+    return { bg, text, border };
+  };
+
+  // Vibrant aesthetic fallback or direct threshold style
   const getVibrantColors = (critLabel: string) => {
+    const found = tenantConfig.matrixThresholds.find(t => t.label.toLowerCase() === critLabel.toLowerCase());
+    if (found) {
+      return getThresholdStyle(found);
+    }
     const labelLower = critLabel.toLowerCase();
     if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas')) {
-      return {
-        bg: '#00DF89', // Vibrant neon mint green from attached image
-        text: '#091E13',
-        border: '#00c578'
-      };
+      return { bg: '#00DF89', text: '#091E13', border: '#00c578' };
     }
     if (labelLower.includes('modéré') || labelLower.includes('moyen')) {
-      return {
-        bg: '#FFE600', // Vibrant pure yellow from attached image
-        text: '#221F00',
-        border: '#e6cf00'
-      };
+      return { bg: '#FFE600', text: '#221F00', border: '#e6cf00' };
     }
-    // High / Critical / Catastrophic
-    return {
-      bg: '#FF2E2E', // Vibrant solid red from attached image
-      text: '#FFFFFF',
-      border: '#e61d1d'
-    };
+    return { bg: '#FF2E2E', text: '#FFFFFF', border: '#e61d1d' };
   };
 
   const getCellClassNameForBrut = (f: number, i: number) => {
@@ -989,20 +1002,17 @@ export default function MatrixModule({
                 MATRICE DES RISQUES
               </h1>
 
-              {/* Legends (Right top block) */}
+              {/* Legends (Right top block matching tenantConfig.matrixThresholds) */}
               <div className="flex flex-col items-start gap-1 bg-[#10243C] p-2.5 rounded-lg border border-[#1e3450] text-[10px] font-bold shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-[#FF2E2E]"></div>
-                  <span className="text-slate-100">Élevé / Critique</span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="w-4 h-4 rounded bg-[#FFE600]"></div>
-                  <span className="text-slate-100">Moyen / Modéré</span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="w-4 h-4 rounded bg-[#00DF89]"></div>
-                  <span className="text-slate-100">Faible / Limité</span>
-                </div>
+                {tenantConfig.matrixThresholds.map((t, idx) => {
+                  const style = getThresholdStyle(t);
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="w-3.5 h-3.5 rounded border border-white/20 shrink-0" style={{ backgroundColor: style.bg }}></div>
+                      <span className="text-slate-100">{t.label} <span className="text-slate-400 font-mono text-[9px]">({t.minScore}-{t.maxScore})</span></span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
