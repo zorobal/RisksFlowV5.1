@@ -357,8 +357,8 @@ export default function SuperAdminModule({
   };
 
   // Supabase Integration States
-  const [dbUrl, setDbUrl] = useState(() => localStorage.getItem('supabase_url_override') || '');
-  const [dbKey, setDbKey] = useState(() => localStorage.getItem('supabase_key_override') || '');
+  const [dbUrl, setDbUrl] = useState(() => localStorage.getItem('supabase_url_override') || getSupabaseConfig().url || '');
+  const [dbKey, setDbKey] = useState(() => localStorage.getItem('supabase_key_override') || getSupabaseConfig().key || '');
   const [connStatus, setConnStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [connMessage, setConnMessage] = useState('');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'pushing' | 'pulling'>('idle');

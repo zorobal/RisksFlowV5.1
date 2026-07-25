@@ -1,16 +1,28 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Get credentials from environment variables or localStorage overrides
+// Configuration centrale globale de la Base de Données Supabase (Valable pour tous les ordinateurs)
+export const DEFAULT_CENTRAL_SUPABASE_URL = 'https://jwzztgepisctloadlzxm.supabase.co';
+export const DEFAULT_CENTRAL_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3enp0Z2VwaXNjdGxvYWRsenhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MzM5MzcsImV4cCI6MjA5ODMwOTkzN30.daqVda5eZztagOsipp326mPLzYbHi7UKyJrCMHJQq1A';
+
+// Get credentials from environment variables, central defaults, or localStorage overrides
 export const getSupabaseConfig = () => {
   const localUrl = localStorage.getItem('supabase_url_override');
   const localKey = localStorage.getItem('supabase_key_override');
 
   const meta = import.meta as any;
+  const envUrl = meta.env?.VITE_SUPABASE_URL || '';
+  const envKey = meta.env?.VITE_SUPABASE_ANON_KEY || '';
+
+  const url = (localUrl || envUrl || DEFAULT_CENTRAL_SUPABASE_URL || '').trim();
+  const key = (localKey || envKey || DEFAULT_CENTRAL_SUPABASE_ANON_KEY || '').trim();
+
   return {
-    url: localUrl || meta.env?.VITE_SUPABASE_URL || '',
-    key: localKey || meta.env?.VITE_SUPABASE_ANON_KEY || '',
+    url,
+    key,
     isOverridden: !!(localUrl && localKey),
-    isEnvSet: !!(meta.env?.VITE_SUPABASE_URL && meta.env?.VITE_SUPABASE_ANON_KEY),
+    isEnvSet: !!(envUrl && envKey),
+    isCentralDefault: !!(DEFAULT_CENTRAL_SUPABASE_URL && DEFAULT_CENTRAL_SUPABASE_ANON_KEY),
+    isConfigured: !!(url && key),
   };
 };
 
