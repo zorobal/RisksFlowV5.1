@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import OdooNavbar from './components/OdooNavbar';
 import DashboardModule from './components/DashboardModule';
 import RiskMappingModule from './components/RiskMappingModule';
@@ -357,6 +357,16 @@ export default function App() {
     return !a.tenantId || a.tenantId === activeTenantId || a.tenantId === activeEntreprise?.id || activeTenantRisks.some(r => r.id === a.riskId);
   });
 
+  const activeTenantUsers = useMemo(() => {
+    return users.filter(u => {
+      if (u.role === 'SuperAdmin') return true;
+      if (activeTenantId === 'tenant1') {
+        return !u.tenantId || u.tenantId === 'tenant1' || u.tenantId === activeEntreprise?.id;
+      }
+      return u.tenantId === activeTenantId || u.tenantId === activeEntreprise?.id;
+    });
+  }, [users, activeTenantId, activeEntreprise]);
+
   const addAuditLog = (action: string, details: string) => {
     const newLog: AuditLog = {
       id: `log_${Date.now()}`,
@@ -479,7 +489,7 @@ export default function App() {
         setActiveTenantId={setActiveTenantId}
         currentUser={currentUser}
         setCurrentUser={setCurrentUser}
-        users={users}
+        users={isSuperAdminMode ? users : activeTenantUsers}
         onUpdateUsers={setUsers}
         onConfigureCompany={() => {
           setAdminTab('tenants');
@@ -553,13 +563,13 @@ export default function App() {
                 risks={activeTenantRisks}
                 tenantConfig={activeTenantConfig}
                 actions={activeTenantActions}
-                users={users}
+                users={activeTenantUsers}
                 currentUser={currentUser}
                 isSuperAdminMode={isSuperAdminMode}
                 onAddRisk={handleAddRisk}
-                onUpdateRisk={(updated) => setRisks(prev => prev.map(r => r.id === updated.id ? updated : r))}
+                onUpdateRisk={(updated) => setRisks(prev => prev.map(r => r.id === updated.id ? { ...updated, tenantId: updated.tenantId || r.tenantId || activeTenantId } : r))}
                 onDeleteRisk={(id) => setRisks(prev => prev.filter(r => r.id !== id))}
-                onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a${actions.length + 1}`, progress: 0 }])}
+                onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
                 onAddLog={addAuditLog}
               />
             )}
@@ -584,9 +594,9 @@ export default function App() {
                 actions={activeTenantActions}
                 risks={activeTenantRisks}
                 tenantConfig={activeTenantConfig}
-                users={users}
-                onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a${actions.length + 1}`, progress: 0 }])}
-                onUpdateActionPlan={(updated) => setActions(prev => prev.map(a => a.id === updated.id ? updated : a))}
+                users={activeTenantUsers}
+                onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
+                onUpdateActionPlan={(updated) => setActions(prev => prev.map(a => a.id === updated.id ? { ...updated, tenantId: updated.tenantId || a.tenantId || activeTenantId } : a))}
                 onAddLog={addAuditLog}
               />
             )}
@@ -603,7 +613,7 @@ export default function App() {
                 onUpdateRules={setRules}
                 accessProfiles={accessProfiles}
                 onUpdateAccessProfiles={setAccessProfiles}
-                users={users}
+                users={activeTenantUsers}
                 onAddLog={addAuditLog}
                 maxSuccursales={activeLicence?.nombre_succursales_max ?? 5}
                 maxDirections={5}
@@ -621,7 +631,7 @@ export default function App() {
                 missions={auditMissions}
                 findings={auditFindings}
                 fonctions={fonctions}
-                users={users}
+                users={activeTenantUsers}
                 currentUser={currentUser}
                 onAddMission={(newM) => setAuditMissions(prev => [...prev, { ...newM, id: `m_${Date.now()}` }])}
                 onAddFinding={(newF) => setAuditFindings(prev => [...prev, { ...newF, id: `f_${Date.now()}` }])}
@@ -647,10 +657,10 @@ export default function App() {
 
             {activeModule === 'admin' && (
               <AdminModule 
-                users={users}
-                onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}` }])}
+                users={activeTenantUsers}
+                onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}`, tenantId: u.tenantId || activeTenantId }])}
                 onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
-                onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? u : item))}
+                onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? { ...u, tenantId: u.tenantId || item.tenantId || activeTenantId } : item))}
                 tenants={tenants}
                 onAddTenant={(name) => setTenants(prev => [...prev, { ...SOGESTI_CONFIG, id: `tenant_${Date.now()}`, companyName: name }])}
                 auditLogs={auditLogs}

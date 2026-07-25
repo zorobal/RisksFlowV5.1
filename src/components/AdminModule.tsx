@@ -393,6 +393,7 @@ export default function AdminModule({
       role: selectedRoles[0],
       roles: selectedRoles,
       isActive: true,
+      tenantId: activeTenantId,
       entityId: newUserEntityId || undefined,
       allowedModules: selectedRoles.includes('Administrateur') || selectedRoles.includes('SuperAdmin')
         ? ['dashboard', 'risks', 'evaluation', 'heatmap', 'actions', 'audit', 'compliance', 'config', 'admin', 'reporting']
@@ -439,6 +440,7 @@ export default function AdminModule({
       role: editUserRole,
       roles: [editUserRole],
       isActive: editUserIsActive,
+      tenantId: editingUser.tenantId || activeTenantId,
       allowedModules: editUserAllowedModules,
       entityId: editUserEntityId || undefined,
       avatar: editUserAvatar || undefined
