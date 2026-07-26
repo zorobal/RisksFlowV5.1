@@ -362,13 +362,13 @@ const mapTenantToDb = (t: any) => ({
   id: t.id,
   company_name: t.companyName || t.company_name,
   logo_url: t.logoUrl || t.logo_url || null,
-  scales: typeof t.scales === 'string' ? t.scales : JSON.stringify(t.scales || {}),
-  formula: typeof t.formula === 'string' ? t.formula : JSON.stringify(t.formula || {}),
+  scales: typeof t.scales === 'object' && t.scales !== null ? t.scales : safeJsonParse(t.scales, {}),
+  formula: typeof t.formula === 'object' && t.formula !== null ? t.formula : safeJsonParse(t.formula, {}),
   matrix_size: t.matrixSize || t.matrix_size || 4,
-  matrix_thresholds: typeof t.matrixThresholds === 'string' ? t.matrixThresholds : JSON.stringify(t.matrixThresholds || t.matrix_thresholds || []),
-  workflow_steps: typeof t.workflowSteps === 'string' ? t.workflowSteps : JSON.stringify(t.workflowSteps || t.workflow_steps || []),
-  categories: typeof t.categories === 'string' ? t.categories : JSON.stringify(t.categories || []),
-  entities: typeof t.entities === 'string' ? t.entities : JSON.stringify(t.entities || []),
+  matrix_thresholds: Array.isArray(t.matrixThresholds) ? t.matrixThresholds : safeJsonParse(t.matrixThresholds || t.matrix_thresholds, []),
+  workflow_steps: Array.isArray(t.workflowSteps) ? t.workflowSteps : safeJsonParse(t.workflowSteps || t.workflow_steps, []),
+  categories: Array.isArray(t.categories) ? t.categories : safeJsonParse(t.categories, []),
+  entities: Array.isArray(t.entities) ? t.entities : safeJsonParse(t.entities, []),
 });
 
 const mapTenantFromDb = (t: any) => ({

@@ -604,7 +604,10 @@ export default function App() {
             {activeModule === 'config' && (
               <ConfigModule 
                 tenantConfig={activeTenantConfig}
-                onUpdateTenantConfig={(updated) => setTenants(prev => prev.map(t => t.id === updated.id ? updated : t))}
+                onUpdateTenantConfig={(updated) => setTenants(prev => {
+                  const exists = prev.some(t => t.id === updated.id);
+                  return exists ? prev.map(t => t.id === updated.id ? updated : t) : [...prev, updated];
+                })}
                 fonctions={fonctions}
                 onUpdateFonctions={setFonctions}
                 affectations={affectations}
@@ -672,7 +675,10 @@ export default function App() {
                 licence={activeLicence}
                 onUpdateLicence={(l) => setLicences(prev => prev.map(item => item.id === l.id ? l : item))}
                 tenantConfig={activeTenantConfig}
-                onUpdateTenantConfig={(updated) => setTenants(prev => prev.map(t => t.id === updated.id ? updated : t))}
+                onUpdateTenantConfig={(updated) => setTenants(prev => {
+                  const exists = prev.some(t => t.id === updated.id);
+                  return exists ? prev.map(t => t.id === updated.id ? updated : t) : [...prev, updated];
+                })}
                 onAddLog={addAuditLog}
                 activeEntreprise={activeEntreprise}
                 onUpdateEntreprise={(e) => setEntreprises(prev => prev.map(item => item.id === e.id ? e : item))}

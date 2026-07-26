@@ -918,25 +918,27 @@ export default function ConfigModule({
 
     const newCat: RiskCategory = {
       id: `cat_${Date.now()}`,
-      name: newCatName,
+      name: newCatName.trim(),
       color: newCatColor,
-      description: newCatDesc
+      description: newCatDesc.trim()
     };
 
+    const currentCats = tenantConfig.categories || [];
     onUpdateTenantConfig({
       ...tenantConfig,
-      categories: [...tenantConfig.categories, newCat]
+      categories: [...currentCats, newCat]
     });
     
     setNewCatName('');
     setNewCatDesc('');
-    onAddLog('Config Catégories', `Ajout de la catégorie de risque "${newCatName}"`);
+    onAddLog('Config Catégories', `Ajout de la catégorie de risque "${newCatName.trim()}"`);
   };
 
   const handleRemoveCategory = (id: string) => {
+    const currentCats = tenantConfig.categories || [];
     onUpdateTenantConfig({
       ...tenantConfig,
-      categories: tenantConfig.categories.filter(c => c.id !== id)
+      categories: currentCats.filter(c => c.id !== id)
     });
   };
 
@@ -951,7 +953,8 @@ export default function ConfigModule({
     e.preventDefault();
     if (!editingCategory || !editCatName.trim()) return;
 
-    const updatedCategories = tenantConfig.categories.map(c => {
+    const currentCats = tenantConfig.categories || [];
+    const updatedCategories = currentCats.map(c => {
       if (c.id === editingCategory.id) {
         return {
           ...c,
@@ -3668,7 +3671,7 @@ export default function ConfigModule({
 
               {/* Categories list */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-96 overflow-y-auto">
-                {tenantConfig.categories.map((cat) => (
+                {(tenantConfig.categories || []).map((cat) => (
                   <div 
                     key={cat.id} 
                     className="p-3 bg-white hover:bg-slate-50/80 border border-slate-200 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition"
