@@ -797,14 +797,28 @@ export const pushAllToSupabase = async (
       lastError = error;
       const errMsg = String(error.message || '');
 
-      // Check if the error is due to a missing column in Supabase schema (e.g. tenant_id, causes, consequences, date_cloture)
+      // Check if the error is due to a missing column in Supabase schema
       const sampleKeys = Object.keys(payload[0] || {});
       let missingCol: string | null = null;
 
-      for (const key of sampleKeys) {
-        if (key !== 'id' && (errMsg.includes(`'${key}'`) || errMsg.includes(`"${key}"`) || errMsg.includes(` ${key} `) || errMsg.includes(`column ${key}`))) {
-          missingCol = key;
-          break;
+      const colMatch =
+        errMsg.match(/column ["']?([a_z0_9_]+)["']? of relation/i) ||
+        errMsg.match(/Could not find the ['"]?([a_z0_9_]+)['"]? column/i) ||
+        errMsg.match(/column ["']?([a_z0_9_]+)["']? does not exist/i);
+
+      if (colMatch && colMatch[1]) {
+        const matched = colMatch[1];
+        if (sampleKeys.includes(matched) && matched !== 'id') {
+          missingCol = matched;
+        }
+      }
+
+      if (!missingCol) {
+        for (const key of sampleKeys) {
+          if (key !== 'id' && (errMsg.includes(`'${key}'`) || errMsg.includes(`"${key}"`) || errMsg.includes(`column ${key}`))) {
+            missingCol = key;
+            break;
+          }
         }
       }
 
@@ -816,22 +830,9 @@ export const pushAllToSupabase = async (
           return newRow;
         });
       } else {
-        // Fallback: strip known optional columns if not already stripped
-        const knownOptional = ['tenant_id', 'causes', 'consequences', 'date_cloture', 'bilan_annuel'];
-        let strippedAny = false;
-        payload = payload.map(row => {
-          const newRow = { ...row };
-          for (const col of knownOptional) {
-            if (col in newRow) {
-              delete newRow[col];
-              strippedAny = true;
-            }
-          }
-          return newRow;
-        });
-        if (!strippedAny) {
-          break;
-        }
+        // Stop batch retries if error is not a missing column error (e.g. network/RLS issue).
+        // Do NOT blindly delete columns like causes, consequences, description, etc.
+        break;
       }
     }
 
