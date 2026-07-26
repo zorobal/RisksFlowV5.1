@@ -308,6 +308,17 @@ CREATE TABLE IF NOT EXISTS historique_licences (
   details TEXT NOT NULL
 );
 
+-- 18. Table des Sessions d'Exercice (Administration)
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  annee INTEGER NOT NULL,
+  date_debut TEXT NOT NULL,
+  date_fin TEXT NOT NULL,
+  statut TEXT NOT NULL,
+  date_cloture TEXT,
+  bilan_annuel TEXT
+);
+
 -- Activer Row Level Security (RLS) ou autoriser l'accès anonyme
 -- (Pour les prototypes simples, vous pouvez désactiver RLS ou configurer des politiques permissives)
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
@@ -327,6 +338,7 @@ ALTER TABLE compliance_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entreprises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE licences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE historique_licences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 
 -- Politiques d'accès complet pour l'API Anon Key (Copie de secours)
 CREATE POLICY "Allow public select" ON tenants FOR SELECT USING (true);
@@ -351,6 +363,7 @@ CREATE POLICY "Allow all incidents" ON compliance_incidents FOR ALL TO anon USIN
 CREATE POLICY "Allow all entreprises" ON entreprises FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all licences" ON licences FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all historique" ON historique_licences FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all sessions" ON sessions FOR ALL TO anon USING (true) WITH CHECK (true);
 `;
 };
 
@@ -707,6 +720,26 @@ const mapHistoriqueLicenceFromDb = (h: any) => ({
   details: h.details,
 });
 
+const mapSessionToDb = (s: any) => ({
+  id: s.id,
+  annee: Number(s.annee || 2026),
+  date_debut: s.dateDebut || s.date_debut || '',
+  date_fin: s.dateFin || s.date_fin || '',
+  statut: s.statut || 'Ouverte',
+  date_cloture: s.dateCloture || s.date_cloture || null,
+  bilan_annuel: s.bilanAnnuel || s.bilan_annuel || null,
+});
+
+const mapSessionFromDb = (s: any) => ({
+  id: s.id,
+  annee: Number(s.annee || 2026),
+  dateDebut: s.date_debut || s.dateDebut || '',
+  dateFin: s.date_fin || s.dateFin || '',
+  statut: s.statut || 'Ouverte',
+  dateCloture: s.date_cloture || s.dateCloture || undefined,
+  bilanAnnuel: s.bilan_annuel || s.bilanAnnuel || undefined,
+});
+
 // Sync data to Supabase (PUSH)
 export const pushAllToSupabase = async (
   client: SupabaseClient,
@@ -728,6 +761,7 @@ export const pushAllToSupabase = async (
     entreprises: any[];
     licences: any[];
     historiqueLicences: any[];
+    sessions?: any[];
   }
 ): Promise<{ success: boolean; errorCount: number; messages: string[] }> => {
   const results: string[] = [];
@@ -826,6 +860,7 @@ export const pushAllToSupabase = async (
     await pushTable('entreprises', data.entreprises, mapEntrepriseToDb);
     await pushTable('licences', data.licences, mapLicenceToDb);
     await pushTable('historique_licences', data.historiqueLicences, mapHistoriqueLicenceToDb);
+    await pushTable('sessions', data.sessions || [], mapSessionToDb);
 
     return {
       success: errorCount === 0,
@@ -875,6 +910,7 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
     const entreprisesRaw = await pullTable('entreprises');
     const licencesRaw = await pullTable('licences');
     const historiqueLicencesRaw = await pullTable('historique_licences');
+    const sessionsRaw = await pullTable('sessions');
 
     const mappedData = {
       tenants: tenantsRaw.map(mapTenantFromDb),
@@ -894,6 +930,7 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
       entreprises: entreprisesRaw.map(mapEntrepriseFromDb),
       licences: licencesRaw.map(mapLicenceFromDb),
       historiqueLicences: historiqueLicencesRaw.map(mapHistoriqueLicenceFromDb),
+      sessions: sessionsRaw.map(mapSessionFromDb),
     };
 
     return {

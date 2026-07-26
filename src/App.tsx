@@ -105,33 +105,121 @@ export default function App() {
 
   const LOCAL_STORAGE_KEY = 'riskflow_grc_dataset_v3';
 
+  // Helper function to merge database risks with local storage risks (DB taking precedence)
+  const mergeRisksWithLocal = (dbRisks: Risk[], localRisks: Risk[]): Risk[] => {
+    if (!localRisks || localRisks.length === 0) return dbRisks;
+    if (!dbRisks || dbRisks.length === 0) return localRisks;
+
+    const dbMap = new Map<string, Risk>(dbRisks.map(r => [r.id, r]));
+    const localMap = new Map<string, Risk>(localRisks.map(r => [r.id, r]));
+    const mergedMap = new Map<string, Risk>();
+
+    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
+
+    for (const id of allIds) {
+      const localR = localMap.get(id);
+      const dbR = dbMap.get(id);
+
+      if (localR && !dbR) {
+        mergedMap.set(id, localR);
+      } else if (dbR && !localR) {
+        mergedMap.set(id, dbR);
+      } else if (localR && dbR) {
+        // DB (Supabase) takes precedence for online persistence!
+        mergedMap.set(id, {
+          ...localR,
+          ...dbR,
+          title: dbR.title?.trim() || localR.title,
+          description: dbR.description?.trim() || localR.description,
+          causes: dbR.causes?.trim() || localR.causes,
+          consequences: dbR.consequences?.trim() || localR.consequences,
+          categoryId: dbR.categoryId || localR.categoryId,
+          entityId: dbR.entityId || localR.entityId,
+          frequencyValue: dbR.frequencyValue ?? localR.frequencyValue,
+          impactValue: dbR.impactValue ?? localR.impactValue,
+          controlValue: dbR.controlValue ?? localR.controlValue,
+          scoreBrut: dbR.scoreBrut ?? localR.scoreBrut,
+          scoreResiduel: dbR.scoreResiduel ?? localR.scoreResiduel,
+          statusId: dbR.statusId || localR.statusId,
+          history: (dbR.history?.length || 0) >= (localR.history?.length || 0) ? dbR.history : localR.history,
+        });
+      }
+    }
+
+    return Array.from(mergedMap.values());
+  };
+
+  const mergeActionsWithLocal = (dbActions: ActionPlan[], localActions: ActionPlan[]): ActionPlan[] => {
+    if (!localActions || localActions.length === 0) return dbActions;
+    if (!dbActions || dbActions.length === 0) return localActions;
+
+    const dbMap = new Map<string, ActionPlan>(dbActions.map(a => [a.id, a]));
+    const localMap = new Map<string, ActionPlan>(localActions.map(a => [a.id, a]));
+    const merged: ActionPlan[] = [];
+
+    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
+    for (const id of allIds) {
+      const localA = localMap.get(id);
+      const dbA = dbMap.get(id);
+      if (localA && !dbA) merged.push(localA);
+      else if (dbA && !localA) merged.push(dbA);
+      else if (localA && dbA) {
+        merged.push({ ...localA, ...dbA });
+      }
+    }
+    return merged;
+  };
+
+  const mergeSessionsWithLocal = (dbSessions: SessionExercice[], localSessions: SessionExercice[]): SessionExercice[] => {
+    if (!localSessions || localSessions.length === 0) return dbSessions;
+    if (!dbSessions || dbSessions.length === 0) return localSessions;
+
+    const dbMap = new Map<string, SessionExercice>(dbSessions.map(s => [s.id, s]));
+    const localMap = new Map<string, SessionExercice>(localSessions.map(s => [s.id, s]));
+    const merged: SessionExercice[] = [];
+
+    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
+    for (const id of allIds) {
+      const localS = localMap.get(id);
+      const dbS = dbMap.get(id);
+      if (localS && !dbS) merged.push(localS);
+      else if (dbS && !localS) merged.push(dbS);
+      else if (localS && dbS) {
+        merged.push({ ...localS, ...dbS });
+      }
+    }
+    return merged;
+  };
+
   // 1. Initialisation avec Restauration LocalStorage Immédiate + Chargement Supabase
   useEffect(() => {
     async function initData() {
       setIsLoading(true);
+      let localDataset: any = null;
 
       // A. Restauration instantanée depuis LocalStorage si disponible
       try {
         const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (cached) {
-          const d = JSON.parse(cached);
-          if (d.tenants?.length) setTenants(d.tenants);
-          if (d.users?.length) setUsers(d.users);
-          if (d.risks?.length) setRisks(d.risks);
-          if (d.actions?.length) setActions(d.actions);
-          if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
-          if (d.fonctions?.length) setFonctions(d.fonctions);
-          if (d.affectations?.length) setAffectations(d.affectations);
-          if (d.rules?.length) setRules(d.rules);
-          if (d.accessProfiles?.length) setAccessProfiles(d.accessProfiles);
-          if (d.auditMissions?.length) setAuditMissions(d.auditMissions);
-          if (d.auditFindings?.length) setAuditFindings(d.auditFindings);
-          if (d.complianceFrameworks?.length) setComplianceFrameworks(d.complianceFrameworks);
-          if (d.complianceObligations?.length) setComplianceObligations(d.complianceObligations);
-          if (d.complianceIncidents?.length) setComplianceIncidents(d.complianceIncidents);
-          if (d.entreprises?.length) setEntreprises(d.entreprises);
-          if (d.licences?.length) setLicences(d.licences);
-          if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
+          localDataset = JSON.parse(cached);
+          if (localDataset.tenants?.length) setTenants(localDataset.tenants);
+          if (localDataset.users?.length) setUsers(localDataset.users);
+          if (localDataset.risks?.length) setRisks(localDataset.risks);
+          if (localDataset.actions?.length) setActions(localDataset.actions);
+          if (localDataset.auditLogs?.length) setAuditLogs(localDataset.auditLogs);
+          if (localDataset.fonctions?.length) setFonctions(localDataset.fonctions);
+          if (localDataset.affectations?.length) setAffectations(localDataset.affectations);
+          if (localDataset.rules?.length) setRules(localDataset.rules);
+          if (localDataset.accessProfiles?.length) setAccessProfiles(localDataset.accessProfiles);
+          if (localDataset.auditMissions?.length) setAuditMissions(localDataset.auditMissions);
+          if (localDataset.auditFindings?.length) setAuditFindings(localDataset.auditFindings);
+          if (localDataset.complianceFrameworks?.length) setComplianceFrameworks(localDataset.complianceFrameworks);
+          if (localDataset.complianceObligations?.length) setComplianceObligations(localDataset.complianceObligations);
+          if (localDataset.complianceIncidents?.length) setComplianceIncidents(localDataset.complianceIncidents);
+          if (localDataset.entreprises?.length) setEntreprises(localDataset.entreprises);
+          if (localDataset.licences?.length) setLicences(localDataset.licences);
+          if (localDataset.historiqueLicences?.length) setHistoriqueLicences(localDataset.historiqueLicences);
+          if (localDataset.sessions?.length) setSessions(localDataset.sessions);
         }
       } catch (e) {
         console.error('[LocalStorage Init Error]', e);
@@ -147,7 +235,6 @@ export default function App() {
             const d = res.data;
             if (d.tenants?.length) setTenants(d.tenants);
             if (d.users?.length) {
-              // Ensure superadmin and preset accounts are available alongside database users
               const mergedUsers = [...d.users];
               PRESET_USERS.forEach(pu => {
                 if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
@@ -156,8 +243,17 @@ export default function App() {
               });
               setUsers(mergedUsers);
             }
-            if (d.risks?.length) setRisks(d.risks);
-            if (d.actions?.length) setActions(d.actions);
+
+            const finalRisks = mergeRisksWithLocal(d.risks || [], localDataset?.risks || []);
+            setRisks(finalRisks);
+
+            const finalActions = mergeActionsWithLocal(d.actions || [], localDataset?.actions || []);
+            setActions(finalActions);
+
+            const finalSessions = mergeSessionsWithLocal(d.sessions || [], localDataset?.sessions || []);
+            const sessionsToSet = finalSessions.length > 0 ? finalSessions : PRESET_SESSIONS;
+            setSessions(sessionsToSet);
+
             if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
             if (d.fonctions?.length) setFonctions(d.fonctions);
             if (d.affectations?.length) setAffectations(d.affectations);
@@ -172,12 +268,21 @@ export default function App() {
             if (d.licences?.length) setLicences(d.licences);
             if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
 
-            // Cache fresh central database state in LocalStorage for fast offline display
+            const mergedDataset = {
+              ...d,
+              risks: finalRisks,
+              actions: finalActions,
+              sessions: sessionsToSet
+            };
+
             try {
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(d));
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedDataset));
             } catch (e) {
               console.error('[LocalStorage Sync Cache Error]', e);
             }
+
+            // Sync updated dataset back to Supabase
+            pushAllToSupabase(client, mergedDataset);
           }
         } catch (error) {
           console.error('[Supabase Error] Échec de récupération BDD:', error);
@@ -189,7 +294,7 @@ export default function App() {
     initData();
   }, []);
 
-  // 2. Persistance locale instantanée + Synchronisation automatique vers Supabase (Throttled par 2.5s)
+  // 2. Persistance locale instantanée + Synchronisation automatique vers Supabase (Throttled par 1s)
   useEffect(() => {
     if (isLoading) return;
 
@@ -198,6 +303,7 @@ export default function App() {
       affectations, rules, accessProfiles, auditMissions,
       auditFindings, complianceFrameworks, complianceObligations,
       complianceIncidents, entreprises, licences, historiqueLicences,
+      sessions
     };
 
     // A. Écriture immédiate en LocalStorage
@@ -214,14 +320,14 @@ export default function App() {
     const delayDebounceFn = setTimeout(() => {
       console.log('[Supabase Sync] Sauvegarde automatique BDD...');
       pushAllToSupabase(client, dataset);
-    }, 2500);
+    }, 1000);
 
     return () => clearTimeout(delayDebounceFn);
   }, [
     tenants, users, risks, actions, auditLogs, fonctions,
     affectations, rules, accessProfiles, auditMissions,
     auditFindings, complianceFrameworks, complianceObligations,
-    complianceIncidents, entreprises, licences, historiqueLicences, isLoading
+    complianceIncidents, entreprises, licences, historiqueLicences, sessions, isLoading
   ]);
 
   // 3. Action de Sauvegarde Manuelle Déclenchée depuis la Barre Supérieure
@@ -232,6 +338,7 @@ export default function App() {
       affectations, rules, accessProfiles, auditMissions,
       auditFindings, complianceFrameworks, complianceObligations,
       complianceIncidents, entreprises, licences, historiqueLicences,
+      sessions
     };
 
     // Sauvegarde locale instantanée
@@ -545,6 +652,8 @@ export default function App() {
             onUpdateComplianceObligations={setComplianceObligations}
             complianceIncidents={complianceIncidents}
             onUpdateComplianceIncidents={setComplianceIncidents}
+            sessions={sessions}
+            onUpdateSessions={setSessions}
             onAddLog={addAuditLog}
             onRestoreTenantData={() => {}}
           />

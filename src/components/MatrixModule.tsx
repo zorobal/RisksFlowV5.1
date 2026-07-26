@@ -244,15 +244,9 @@ export default function MatrixModule({
     return { icon: <TrendingUp className="w-3.5 h-3.5 text-rose-500 font-bold" />, label: 'Hausse', color: 'text-rose-700 bg-rose-50 border border-rose-100' };
   };
 
-  // Structured consequences based on category for realistic printable detail
   const getRiskConsequences = (r: Risk) => {
     if (r.consequences && r.consequences.trim()) return r.consequences;
-    if (r.categoryId === 'cat_finance') return 'Pertes financières de trésorerie, pénalités contractuelles et impacts sur les marges.';
-    if (r.categoryId === 'cat_operational') return 'Rupture d\'activité, retards de livraison, goulots d\'étranglements et insatisfaction client.';
-    if (r.categoryId === 'cat_it') return 'Indisponibilité des serveurs, risque de piratage, violation de données confidentielles (RGPD).';
-    if (r.categoryId === 'cat_regulatory') return 'Amendes administratives lourdes (CNIL, régulateurs), risques judiciaires et dégradation de réputation.';
-    if (r.categoryId === 'cat_human') return 'Absentéisme accru, perte de compétences clés, climat social tendu et baisse de productivité.';
-    return 'Perturbations de l\'activité, coûts de remédiation imprévus et dégradation de l\'image de marque.';
+    return '';
   };
 
   const handlePrint = () => {
@@ -604,7 +598,7 @@ export default function MatrixModule({
                             {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
                           </td>
                           <td className="py-2 px-3 border-r border-slate-200 text-rose-900 text-[8.5px] leading-relaxed">
-                            {getRiskConsequences(risk)}
+                            {getRiskConsequences(risk) || <span className="text-slate-300 italic">Non renseignées</span>}
                           </td>
                           <td className="py-2 px-2 border-r border-slate-200 text-center font-bold text-slate-700">{risk.impactValue}</td>
                           <td className="py-2 px-2 border-r border-slate-200 text-center font-bold text-slate-700">{risk.frequencyValue}</td>
@@ -1317,7 +1311,7 @@ export default function MatrixModule({
                           {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
                         </td>
                         <td className="py-2.5 px-3 border-r border-slate-200 text-rose-900 text-[10px] leading-relaxed">
-                          {getRiskConsequences(risk)}
+                          {getRiskConsequences(risk) || <span className="text-slate-300 italic">Non renseignées</span>}
                         </td>
                         <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.frequencyValue}</td>
                         <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.impactValue}</td>

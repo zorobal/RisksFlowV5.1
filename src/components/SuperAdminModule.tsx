@@ -52,7 +52,8 @@ import {
   Risk, 
   ActionPlan, 
   AuditLog, 
-  Fonction 
+  Fonction,
+  SessionExercice
 } from '../types';
 import { 
   getSupabaseConfig, 
@@ -99,6 +100,8 @@ interface SuperAdminModuleProps {
   onUpdateComplianceObligations: React.Dispatch<React.SetStateAction<any[]>>;
   complianceIncidents: any[];
   onUpdateComplianceIncidents: React.Dispatch<React.SetStateAction<any[]>>;
+  sessions?: SessionExercice[];
+  onUpdateSessions?: React.Dispatch<React.SetStateAction<SessionExercice[]>>;
   onAddLog: (action: string, details: string) => void;
   onRestoreTenantData: (tenantId: string, restoredData: any) => void;
 }
@@ -138,8 +141,10 @@ export default function SuperAdminModule({
   onUpdateComplianceObligations,
   complianceIncidents,
   onUpdateComplianceIncidents,
+  sessions,
+  onUpdateSessions,
   onAddLog,
-  onRestoreTenantData
+  onRestoreTenantData,
 }: SuperAdminModuleProps) {
   // Navigation tabs in SuperAdmin space
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tenants' | 'licences' | 'users' | 'backups' | 'supervision' | 'support' | 'supabase' | 'settings' | 'smtp'>('dashboard');
@@ -451,12 +456,13 @@ export default function SuperAdminModule({
       entreprises: entreprises || [],
       licences: licences || [],
       historiqueLicences: historiqueLicences || [],
+      sessions: sessions || [],
     };
 
     try {
       const res = await pushAllToSupabase(client, dataset);
       if (res.success) {
-        setSyncLogs(prev => [...prev, '✓ Données synchronisées avec succès sur Supabase (17 tables) !']);
+        setSyncLogs(prev => [...prev, '✓ Données synchronisées avec succès sur Supabase (18 tables) !']);
         addSystemLog('Supabase Push', 'Transfert complet des données locales vers Supabase', 'Succès');
       } else {
         setSyncLogs(prev => [...prev, '⚠ Des erreurs ont été détectées :', ...res.messages]);
@@ -498,6 +504,7 @@ export default function SuperAdminModule({
         if (onUpdateEntreprises && d.entreprises && d.entreprises.length > 0) onUpdateEntreprises(d.entreprises);
         if (onUpdateLicences && d.licences && d.licences.length > 0) onUpdateLicences(d.licences);
         if (onUpdateHistoriqueLicences && d.historiqueLicences && d.historiqueLicences.length > 0) onUpdateHistoriqueLicences(d.historiqueLicences);
+        if (onUpdateSessions && d.sessions && d.sessions.length > 0) onUpdateSessions(d.sessions);
 
         setSyncLogs(prev => [...prev, '✓ Récupération cloud réussie ! L\'ERP local a été mis à jour.']);
         addSystemLog('Supabase Pull', 'Synchronisation locale des données depuis Supabase', 'Succès');
