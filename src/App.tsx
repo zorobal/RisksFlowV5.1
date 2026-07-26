@@ -130,9 +130,9 @@ export default function App() {
           ...localR,
           ...dbR,
           title: dbR.title !== undefined && dbR.title !== null && dbR.title.trim() !== '' ? dbR.title : localR.title,
-          description: dbR.description !== undefined && dbR.description !== null ? dbR.description : localR.description,
-          causes: dbR.causes !== undefined && dbR.causes !== null ? dbR.causes : localR.causes,
-          consequences: dbR.consequences !== undefined && dbR.consequences !== null ? dbR.consequences : localR.consequences,
+          description: (dbR.description && dbR.description.trim() !== '') ? dbR.description : (localR.description || ''),
+          causes: (dbR.causes && dbR.causes.trim() !== '') ? dbR.causes : (localR.causes || ''),
+          consequences: (dbR.consequences && dbR.consequences.trim() !== '') ? dbR.consequences : (localR.consequences || ''),
           categoryId: dbR.categoryId || localR.categoryId,
           entityId: dbR.entityId || localR.entityId,
           frequencyValue: dbR.frequencyValue ?? localR.frequencyValue,
@@ -355,10 +355,10 @@ export default function App() {
         const res = await pushAllToSupabase(client, dataset);
         if (res.success) {
           setSaveStatus('saved');
-          setToastMessage('✅ Toutes vos modifications (Catégories, Seuils, Matrice, Risques, Utilisateurs) sont enregistrées en Base de Données !');
+          setToastMessage('✅ Toutes vos modifications (Description Détaillée, Causes, Conséquences, Cotations, Risques, Utilisateurs) ont été sauvegardées avec succès en Base de Données !');
         } else {
           setSaveStatus('saved');
-          setToastMessage('✅ Données sauvegardées avec succès !');
+          setToastMessage('✅ Données et modifications sauvegardées en BDD !');
         }
       } catch (err) {
         setSaveStatus('saved');
