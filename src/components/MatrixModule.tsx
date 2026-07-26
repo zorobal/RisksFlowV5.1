@@ -544,7 +544,7 @@ export default function MatrixModule({
                       const trendObj = getRiskTrend(risk);
                       const critBrut = getCriticality(risk.scoreBrut);
                       const critNet = getCriticality(risk.scoreResiduel);
-                      const riskCategory = tenantConfig.categories.find(c => c.id === risk.categoryId)?.name || risk.categoryId;
+                      const riskCategory = (tenantConfig.categories || []).find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase())?.name || risk.categoryId || 'Inconnu';
                       const entityName = tenantConfig.entities.find(e => e.id === risk.entityId)?.name || risk.entityId;
 
                       return (
@@ -1238,7 +1238,7 @@ export default function MatrixModule({
                     const trend = getRiskTrend(risk);
                     const critBrut = getCriticality(risk.scoreBrut);
                     const critNet = getCriticality(risk.scoreResiduel);
-                    const categoryName = tenantConfig.categories.find(c => c.id === risk.categoryId)?.name || risk.categoryId;
+                    const categoryName = (tenantConfig.categories || []).find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase())?.name || risk.categoryId || 'Inconnu';
                     const entityName = tenantConfig.entities.find(e => e.id === risk.entityId)?.name || risk.entityId;
 
                     return (

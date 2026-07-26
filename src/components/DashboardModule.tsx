@@ -127,11 +127,14 @@ export default function DashboardModule({
   // 4. Current period filtered risks (combining org filter + date + category filter)
   const filteredRisks = useMemo(() => {
     return orgFilteredRisks.filter(r => {
-      const matchCat = selectedCategoryId === 'all' || r.categoryId === selectedCategoryId;
+      const selectedCatObj = (tenantConfig.categories || []).find(c => c.id === selectedCategoryId || c.name === selectedCategoryId);
+      const matchCat = selectedCategoryId === 'all' || 
+                       r.categoryId === selectedCategoryId || 
+                       (selectedCatObj && (r.categoryId === selectedCatObj.name || r.categoryId === selectedCatObj.id));
       const matchTime = matchPeriod(r.createdAt, selectedYear, selectedPeriodicity, selectedMonth, selectedTrimester, selectedStartMonth, selectedEndMonth);
       return matchCat && matchTime;
     });
-  }, [orgFilteredRisks, selectedCategoryId, selectedYear, selectedPeriodicity, selectedMonth, selectedTrimester, selectedStartMonth, selectedEndMonth]);
+  }, [orgFilteredRisks, selectedCategoryId, selectedYear, selectedPeriodicity, selectedMonth, selectedTrimester, selectedStartMonth, selectedEndMonth, tenantConfig.categories]);
 
   // 5. Compute previous period parameters for comparison GRC
   const prevParams = useMemo(() => {
@@ -238,10 +241,20 @@ export default function DashboardModule({
     });
   }, [filteredRisks, tenantConfig.matrixThresholds, totalRisks]);
 
+  const resolveCategoryName = (catId?: string) => {
+    if (!catId) return 'Inconnue';
+    const found = (tenantConfig.categories || []).find(c => c.id === catId || c.name === catId || c.name.toLowerCase() === catId.toLowerCase());
+    return found?.name || catId || 'Inconnue';
+  };
+
   // Categories Breakdown
   const categoryCounts = useMemo(() => {
-    return tenantConfig.categories.map(cat => {
-      const count = filteredRisks.filter(r => r.categoryId === cat.id).length;
+    return (tenantConfig.categories || []).map(cat => {
+      const count = filteredRisks.filter(r => 
+        r.categoryId === cat.id || 
+        r.categoryId === cat.name || 
+        (r.categoryId && cat.name && r.categoryId.toLowerCase() === cat.name.toLowerCase())
+      ).length;
       return {
         label: cat.name,
         count,
@@ -395,7 +408,7 @@ ${
     : topRisks.map((r, index) => {
         const crit = getCriticality(r.scoreResiduel);
         return `### 4.${index + 1}. [${r.id}] ${r.title}
-* **Catégorie :** ${tenantConfig.categories.find(c => c.id === r.categoryId)?.name || 'Inconnue'}
+* **Catégorie :** ${resolveCategoryName(r.categoryId)}
 * **Gravité Résiduelle (Net) :** **${r.scoreResiduel}** (${crit.label}) | **Gravité brute :** ${r.scoreBrut}
 * **Formule de Cotation :** Fréquence [${r.frequencyValue}] x Impact [${r.impactValue}] x Maîtrise [${r.controlValue}]
 * **Propriétaire / Initiateur :** ${r.createdBy}
@@ -897,7 +910,7 @@ ${
                             {r.id}
                           </span>
                           <span className="text-[9.5px] text-slate-400 ml-2 font-medium">
-                            {tenantConfig.categories.find(c => c.id === r.categoryId)?.name || 'Inconnu'}
+                            {resolveCategoryName(r.categoryId)}
                           </span>
                         </div>
 
@@ -948,7 +961,7 @@ ${
                   </span>
                   <span className="text-slate-400 font-semibold">•</span>
                   <span className="text-slate-600 font-bold text-xs uppercase">
-                    Catégorie : {tenantConfig.categories.find(c => c.id === selectedRisk.categoryId)?.name || 'Inconnue'}
+                    Catégorie : {resolveCategoryName(selectedRisk.categoryId)}
                   </span>
                 </div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">

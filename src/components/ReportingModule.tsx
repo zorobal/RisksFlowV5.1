@@ -72,7 +72,7 @@ export default function ReportingModule({
     // Prepare CSV data
     const headers = ['Code', 'Titres', 'Categorie', 'Périmètre_Entite', 'Probabilite_P', 'Impact_I', 'Maitrise_M', 'Calcul_Score_Brut(P*I)', 'Calcul_Score_Residuel', 'Critique_Seuils'];
     const rows = risks.map(r => {
-      const cat = tenantConfig.categories.find(c => c.id === r.categoryId)?.name || '';
+      const cat = (tenantConfig.categories || []).find(c => c.id === r.categoryId || c.name === r.categoryId || c.name.toLowerCase() === r.categoryId?.toLowerCase())?.name || r.categoryId || '';
       const ent = tenantConfig.entities.find(e => e.id === r.entityId)?.name || '';
       const crit = getCriticality(r.scoreResiduel).label;
       return [

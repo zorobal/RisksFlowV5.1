@@ -393,6 +393,7 @@ const mapRiskToDb = (r: any) => ({
   created_by: r.createdBy || r.created_by || '',
   created_at: r.createdAt || r.created_at || new Date().toISOString(),
   status_id: r.statusId || r.status_id || '',
+  tenant_id: r.tenantId || r.tenant_id || null,
   frequency_value: Number(r.frequencyValue ?? r.frequency_value ?? 1),
   impact_value: Number(r.impactValue ?? r.impact_value ?? 1),
   control_value: Number(r.controlValue ?? r.control_value ?? 1),
@@ -429,6 +430,7 @@ const mapActionToDb = (a: any) => ({
   priority: a.priority || 'Moyenne',
   status: a.status || 'À planifier',
   progress: Number(a.progress ?? 0),
+  tenant_id: a.tenantId || a.tenant_id || null,
 });
 
 const mapActionFromDb = (a: any) => ({

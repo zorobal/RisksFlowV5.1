@@ -109,7 +109,10 @@ export default function RiskMappingModule({
     const matchSearch = (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                         (r.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                         (r.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCat = selectedCategory === 'all' || r.categoryId === selectedCategory;
+    const selectedCatObj = categories.find(c => c.id === selectedCategory || c.name === selectedCategory);
+    const matchCat = selectedCategory === 'all' || 
+                     r.categoryId === selectedCategory || 
+                     (selectedCatObj && (r.categoryId === selectedCatObj.name || r.categoryId === selectedCatObj.id));
     const matchEntity = selectedEntity === 'all' || selectedEntityDescendants.includes(r.entityId);
     const matchStatus = selectedStatus === 'all' || r.statusId === selectedStatus;
     
@@ -400,7 +403,7 @@ export default function RiskMappingModule({
                 <tbody className="divide-y divide-slate-100">
                   {filteredRisks.map((risk) => {
                     const crit = getCriticality(risk.scoreResiduel);
-                    const category = categories.find(c => c.id === risk.categoryId);
+                    const category = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase());
                     const entity = entities.find(e => e.id === risk.entityId);
                     const step = workflowSteps.find(s => s.id === risk.statusId);
                     
@@ -419,7 +422,7 @@ export default function RiskMappingModule({
                             className="inline-block mt-1 font-semibold text-[9px] px-1.5 py-0.5 rounded text-white"
                             style={{ backgroundColor: category?.color || '#cbd5e1' }}
                           >
-                            {category?.name}
+                            {category?.name || risk.categoryId || 'Non catégorisé'}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-medium text-slate-600">
@@ -467,7 +470,7 @@ export default function RiskMappingModule({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredRisks.map((risk) => {
               const crit = getCriticality(risk.scoreResiduel);
-              const category = categories.find(c => c.id === risk.categoryId);
+              const category = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase());
               const entity = entities.find(e => e.id === risk.entityId);
               
               return (
@@ -498,7 +501,7 @@ export default function RiskMappingModule({
                       className="text-[9px] font-bold px-2 py-0.5 rounded text-white"
                       style={{ backgroundColor: category?.color || '#cbd5e1' }}
                     >
-                      {category?.name}
+                      {category?.name || risk.categoryId || 'Non catégorisé'}
                     </span>
                     <span className="text-slate-400 italic text-[10px]">{entity?.name}</span>
                   </div>
