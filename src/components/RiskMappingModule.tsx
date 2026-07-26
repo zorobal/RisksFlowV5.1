@@ -128,8 +128,15 @@ export default function RiskMappingModule({
     setIsCreating(false);
     setFormTitle(risk.title || '');
     setFormDesc(risk.description || '');
-    setFormCategory(risk.categoryId || '');
-    setFormEntity(risk.entityId || '');
+
+    // Match existing category by ID or name, fallback to first available
+    const matchedCategory = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase());
+    setFormCategory(matchedCategory ? matchedCategory.id : (categories[0]?.id || ''));
+
+    // Match existing entity by ID or name, fallback to first available
+    const matchedEntity = entities.find(e => e.id === risk.entityId || e.name === risk.entityId || e.name.toLowerCase() === risk.entityId?.toLowerCase());
+    setFormEntity(matchedEntity ? matchedEntity.id : (entities[0]?.id || ''));
+
     setFormFreq(risk.frequencyValue || 1);
     setFormImpact(risk.impactValue || 1);
     setFormControl(risk.controlValue || 1);
@@ -155,12 +162,19 @@ export default function RiskMappingModule({
     e.preventDefault();
     if (!formTitle.trim()) return;
 
+    // Resolve valid category & entity IDs
+    const targetCatObj = categories.find(c => c.id === formCategory || c.name === formCategory || c.name.toLowerCase() === formCategory?.toLowerCase());
+    const finalCategory = targetCatObj ? targetCatObj.id : (categories[0]?.id || formCategory);
+
+    const targetEntObj = entities.find(e => e.id === formEntity || e.name === formEntity || e.name.toLowerCase() === formEntity?.toLowerCase());
+    const finalEntity = targetEntObj ? targetEntObj.id : (entities[0]?.id || formEntity);
+
     if (isCreating) {
       onAddRisk({
         title: formTitle,
         description: formDesc,
-        categoryId: formCategory,
-        entityId: formEntity,
+        categoryId: finalCategory,
+        entityId: finalEntity,
         createdBy: currentUser.name,
         statusId: formStatus,
         frequencyValue: formFreq,
@@ -173,7 +187,7 @@ export default function RiskMappingModule({
       let scoreBrut = formFreq * formImpact;
       let scoreResiduel = scoreBrut * formControl; // defaults
 
-      if (tenantConfig.formula.expression === '(P * I) - M') {
+      if (tenantConfig.formula?.expression === '(P * I) - M') {
         scoreResiduel = Math.max(0, (formFreq * formImpact) - formControl);
       }
 
@@ -181,13 +195,17 @@ export default function RiskMappingModule({
       if (
         formFreq !== selectedRisk.frequencyValue || 
         formImpact !== selectedRisk.impactValue || 
-        formControl !== selectedRisk.controlValue
+        formControl !== selectedRisk.controlValue ||
+        finalCategory !== selectedRisk.categoryId ||
+        finalEntity !== selectedRisk.entityId ||
+        formTitle !== selectedRisk.title ||
+        formDesc !== selectedRisk.description
       ) {
         updatedHistory.push({
           date: new Date().toISOString().split('T')[0],
           user: currentUser.name,
-          action: 'Réévaluation',
-          comment: `Nouvelles cotes: P=${formFreq}, I=${formImpact}, M=${formControl}. Score résiduel: ${scoreResiduel}`
+          action: 'Mise à jour',
+          comment: `Modification de la fiche risque (Catégorie, Entité, Description ou Cotation).`
         });
       }
 
@@ -195,8 +213,8 @@ export default function RiskMappingModule({
         ...selectedRisk,
         title: formTitle,
         description: formDesc,
-        categoryId: formCategory,
-        entityId: formEntity,
+        categoryId: finalCategory,
+        entityId: finalEntity,
         frequencyValue: formFreq,
         impactValue: formImpact,
         controlValue: formControl,
@@ -684,10 +702,13 @@ export default function RiskMappingModule({
               <div className="space-y-1.5">
                 <label className="text-[10px] text-slate-400 font-bold uppercase">Catégorie</label>
                 <select
-                  value={formCategory}
+                  value={categories.some(c => c.id === formCategory) ? formCategory : (categories.find(c => c.name === formCategory || c.name.toLowerCase() === formCategory?.toLowerCase())?.id || categories[0]?.id || '')}
                   onChange={(e) => setFormCategory(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
                 >
+                  {categories.length === 0 && (
+                    <option value="">Aucune catégorie disponible</option>
+                  )}
                   {categories.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -697,10 +718,13 @@ export default function RiskMappingModule({
               <div className="space-y-1.5">
                 <label className="text-[10px] text-slate-400 font-bold uppercase">Périmètre / Entité</label>
                 <select
-                  value={formEntity}
+                  value={entities.some(e => e.id === formEntity) ? formEntity : (entities.find(e => e.name === formEntity || e.name.toLowerCase() === formEntity?.toLowerCase())?.id || entities[0]?.id || '')}
                   onChange={(e) => setFormEntity(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
                 >
+                  {entities.length === 0 && (
+                    <option value="">Aucune entité disponible</option>
+                  )}
                   {entities.map(ent => (
                     <option key={ent.id} value={ent.id}>{ent.name}</option>
                   ))}
