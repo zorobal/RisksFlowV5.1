@@ -21,7 +21,9 @@ import {
   Copy,
   History,
   FileSpreadsheet,
-  Boxes
+  Boxes,
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
@@ -68,6 +70,8 @@ export default function RiskMappingModule({
   // Form fields for creating/editing
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
+  const [formCauses, setFormCauses] = useState('');
+  const [formConsequences, setFormConsequences] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [formEntity, setFormEntity] = useState('');
   const [formFreq, setFormFreq] = useState(1);
@@ -128,6 +132,8 @@ export default function RiskMappingModule({
     setIsCreating(false);
     setFormTitle(risk.title || '');
     setFormDesc(risk.description || '');
+    setFormCauses(risk.causes || '');
+    setFormConsequences(risk.consequences || '');
 
     // Match existing category by ID or name, fallback to first available
     const matchedCategory = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase());
@@ -149,6 +155,8 @@ export default function RiskMappingModule({
     setSelectedRisk(null);
     setFormTitle('');
     setFormDesc('');
+    setFormCauses('');
+    setFormConsequences('');
     setFormCategory(categories[0]?.id || '');
     setFormEntity(entities[0]?.id || '');
     setFormFreq(1);
@@ -173,6 +181,8 @@ export default function RiskMappingModule({
       onAddRisk({
         title: formTitle,
         description: formDesc,
+        causes: formCauses,
+        consequences: formConsequences,
         categoryId: finalCategory,
         entityId: finalEntity,
         createdBy: currentUser.name,
@@ -199,13 +209,15 @@ export default function RiskMappingModule({
         finalCategory !== selectedRisk.categoryId ||
         finalEntity !== selectedRisk.entityId ||
         formTitle !== selectedRisk.title ||
-        formDesc !== selectedRisk.description
+        formDesc !== selectedRisk.description ||
+        formCauses !== selectedRisk.causes ||
+        formConsequences !== selectedRisk.consequences
       ) {
         updatedHistory.push({
           date: new Date().toISOString().split('T')[0],
           user: currentUser.name,
           action: 'Mise à jour',
-          comment: `Modification de la fiche risque (Catégorie, Entité, Description ou Cotation).`
+          comment: `Modification de la fiche risque (Description, Causes, Conséquences ou Cotation).`
         });
       }
 
@@ -213,6 +225,8 @@ export default function RiskMappingModule({
         ...selectedRisk,
         title: formTitle,
         description: formDesc,
+        causes: formCauses,
+        consequences: formConsequences,
         categoryId: finalCategory,
         entityId: finalEntity,
         frequencyValue: formFreq,
@@ -687,13 +701,47 @@ export default function RiskMappingModule({
               />
             </div>
 
+            {/* Section 1: Description Détaillée */}
             <div className="space-y-1.5">
-              <label className="text-[10px] text-slate-400 font-bold uppercase">Description détaillée / Causes & Conséquences</label>
+              <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                Description Détaillée du Risque
+              </label>
               <textarea 
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
-                rows={3}
-                placeholder="Décrivez les causes d'occurence du risque et ses impacts majeurs..."
+                rows={2}
+                placeholder="Description globale du risque et contexte d'apparition..."
+                className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Section 2: Causes du Risque */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                Causes du Risque (Facteurs déclencheurs)
+              </label>
+              <textarea 
+                value={formCauses}
+                onChange={(e) => setFormCauses(e.target.value)}
+                rows={2}
+                placeholder="Ex. Faiblesse de contrôle interne, vulnérabilité technique, erreur humaine, facteur externe..."
+                className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Section 3: Conséquences du Risque */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+                Conséquences du Risque (Impacts majeurs)
+              </label>
+              <textarea 
+                value={formConsequences}
+                onChange={(e) => setFormConsequences(e.target.value)}
+                rows={2}
+                placeholder="Ex. Pertes financières, arrêt d'activité, sanctions réglementaires, atteinte à l'image..."
                 className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
             </div>

@@ -70,14 +70,20 @@ export default function ReportingModule({
     onAddLog('Export Excel / CSV', 'Téléchargement de l\'analyse brute du registre des risques sous format Excel/CSV.');
     
     // Prepare CSV data
-    const headers = ['Code', 'Titres', 'Categorie', 'Périmètre_Entite', 'Probabilite_P', 'Impact_I', 'Maitrise_M', 'Calcul_Score_Brut(P*I)', 'Calcul_Score_Residuel', 'Critique_Seuils'];
+    const headers = ['Code', 'Intitule_Titre', 'Description_Detaillee', 'Causes', 'Consequences', 'Categorie', 'Périmètre_Entite', 'Probabilite_P', 'Impact_I', 'Maitrise_M', 'Calcul_Score_Brut', 'Calcul_Score_Residuel', 'Critique_Seuils'];
     const rows = risks.map(r => {
       const cat = (tenantConfig.categories || []).find(c => c.id === r.categoryId || c.name === r.categoryId || c.name.toLowerCase() === r.categoryId?.toLowerCase())?.name || r.categoryId || '';
       const ent = tenantConfig.entities.find(e => e.id === r.entityId)?.name || '';
       const crit = getCriticality(r.scoreResiduel).label;
+      const desc = r.description || '';
+      const causes = r.causes || '';
+      const cons = r.consequences || '';
       return [
         r.id,
         `"${r.title.replace(/"/g, '""')}"`,
+        `"${desc.replace(/"/g, '""')}"`,
+        `"${causes.replace(/"/g, '""')}"`,
+        `"${cons.replace(/"/g, '""')}"`,
         `"${cat.replace(/"/g, '""')}"`,
         `"${ent.replace(/"/g, '""')}"`,
         r.frequencyValue,

@@ -586,6 +586,8 @@ export default function App() {
                 risks={activeTenantRisks}
                 tenantConfig={activeTenantConfig}
                 onAddLog={addAuditLog}
+                actions={activeTenantActions}
+                onUpdateRisk={(updated) => setRisks(prev => prev.map(r => r.id === updated.id ? { ...updated, tenantId: updated.tenantId || r.tenantId || activeTenantId } : r))}
               />
             )}
 

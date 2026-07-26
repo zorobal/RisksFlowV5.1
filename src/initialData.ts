@@ -200,6 +200,8 @@ export const SOGESTI_RISKS: Risk[] = [
     id: 'R-101',
     title: 'Cyberattaque par Ransomware et blocage du SI comptable à Yaoundé',
     description: 'Cryptage de l\'ensemble des bases de données comptables par un logiciel malveillant via un e-mail de phishing ciblé.',
+    causes: 'Ouverture d\'e-mail malveillant (Phishing ciblé), vulnérabilités systèmes non patchées et absence de filtre e-mail avancé.',
+    consequences: 'Indisponibilité totale du système d\'information comptable, arrêt du traitement des paies et risque de fuite de données.',
     categoryId: 'cat_it',
     entityId: 'e1_2', // Technologie & DSI
     createdBy: 'Alain-Patrick Nkoumou',
@@ -220,6 +222,8 @@ export const SOGESTI_RISKS: Risk[] = [
     id: 'R-102',
     title: 'Non-conformité ANTIC (Cameroun) sur la gestion des données clients',
     description: 'Absence de consentement explicite recueilli sur le site web applicatif suite aux évolutions réglementaires, risque de mise en cause de l\'ANTIC.',
+    causes: 'Absence de mise à jour des conditions générales et des pop-ups de consentement suite aux nouvelles directives réglementaires.',
+    consequences: 'Mise en demeure par l\'ANTIC, amende administrative financière et dégradation de la réputation de l\'entreprise.',
     categoryId: 'cat_regulatory',
     entityId: 'e1_3', // Juridique & Compliance
     createdBy: 'Marie-Thérèse Atangana',
@@ -239,6 +243,8 @@ export const SOGESTI_RISKS: Risk[] = [
     id: 'R-103',
     title: 'Fraude au Président sur virement bancaire international (Alerte Yaoundé)',
     description: 'Phishing ou ingénierie sociale se faisant passer pour le Président afin d\'obtenir de l\'équipe financière un virement monétaire exceptionnel.',
+    causes: 'Usurpation d\'identité, pression hiérarchique simulée et contournement des vérifications d\'usage.',
+    consequences: 'Perte de trésorerie directe, pénalités contractuelles et perte de confiance des partenaires financiers.',
     categoryId: 'cat_finance',
     entityId: 'e1_1', // Finance & Comptabilité
     createdBy: 'Alain-Patrick Nkoumou',
@@ -258,6 +264,8 @@ export const SOGESTI_RISKS: Risk[] = [
     id: 'R-104',
     title: 'Incendie majeur sur l\'entrepôt logistique du Port de Douala',
     description: 'Déclenchement d\'un court-circuit ou sinistre causant la perte irréversible du stock matériel et provoquant un arrêt d\'activité.',
+    causes: 'Vétusté des installations électriques, absence d\'extincteurs automatiques et stockage de matières inflammables.',
+    consequences: 'Destruction des stocks, rupture d\'activité logistique et frais de réparation élevés.',
     categoryId: 'cat_operational',
     entityId: 'e3_1', // Site Logistique Port de Douala
     createdBy: 'Marie-Thérèse Atangana',
@@ -276,6 +284,8 @@ export const SOGESTI_RISKS: Risk[] = [
     id: 'R-105',
     title: 'Démission simultanée d\'ingénieurs de développement clés à Yaoundé',
     description: 'Fuite massive de compétences et de savoir-faire technique suite aux doutes sur le plan de restructuration stratégique annuel.',
+    causes: 'Surenchère sur le marché de l\'emploi, absence de plan de rétention et climat de restructuration anxiogène.',
+    consequences: 'Retards sur les livraisons projets, perte de connaissance métier et coûts de recrutement élevés.',
     categoryId: 'cat_human',
     entityId: 'e1_2', // Technologie & DSI
     createdBy: 'Jean-Pierre Ndzana',
@@ -298,6 +308,8 @@ export const AEROTECH_RISKS: Risk[] = [
     id: 'R-201',
     title: 'Fissure micro-structurelle de l\'empennage en fonderie à Garoua',
     description: 'Défaut de chauffage du moule de fonderie provoquant des faiblesses structurelles invisibles à l\'œil nu sur le modèle d\'empennage des ailes à l\'usine de Garoua.',
+    causes: 'Variations thermiques incontrôlées lors du moulage et usure des capteurs de température.',
+    consequences: 'Risques d\'accidents majeurs, rappel de pièces en série et immobilisation de la flotte.',
     categoryId: 'cat_secu',
     entityId: 'e1_2', // Usine Garoua
     createdBy: 'Marie-Thérèse Atangana',
@@ -316,6 +328,8 @@ export const AEROTECH_RISKS: Risk[] = [
     id: 'R-202',
     title: 'Bug critique du logiciel de pilotage du stabilisateur',
     description: 'Exception non gérée en vol de nuit en cas de givre simultané des trois sondes Pitot menant à la mise en piqué de l\'appareil.',
+    causes: 'Scénario limite non testé dans les bancs de simulation logicielle.',
+    consequences: 'Perte de contrôle en vol, crash potentiel et retrait des certificats de navigabilité.',
     categoryId: 'cat_it',
     entityId: 'e1_1', // Bureau Avionique Yaoundé
     createdBy: 'Alain-Patrick Nkoumou',

@@ -987,12 +987,37 @@ ${
             {/* Left side: Evaluation & Calculations, History, Stepper */}
             <div className="lg:col-span-8 space-y-6">
               
-              {/* Row 1: Description & Core Parameters */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description de la Menace</h4>
-                <p className="text-slate-700 bg-slate-50/50 border rounded-lg p-3.5 text-xs leading-relaxed font-medium">
-                  {selectedRisk.description || "Aucune description détaillée enregistrée pour ce risque."}
-                </p>
+              {/* Row 1: Description, Causes & Conséquences */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1.5 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <h4 className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                    Description Détaillée
+                  </h4>
+                  <p className="text-slate-800 text-xs leading-relaxed font-medium">
+                    {selectedRisk.description || "Aucune description enregistrée."}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 bg-amber-50/60 border border-amber-200/80 rounded-lg p-3">
+                  <h4 className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    Causes du Risque
+                  </h4>
+                  <p className="text-slate-800 text-xs leading-relaxed font-medium">
+                    {selectedRisk.causes || "Aucune cause spécifiée."}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 bg-rose-50/60 border border-rose-200/80 rounded-lg p-3">
+                  <h4 className="text-[10px] font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                    Conséquences du Risque
+                  </h4>
+                  <p className="text-slate-800 text-xs leading-relaxed font-medium">
+                    {selectedRisk.consequences || "Aucune conséquence spécifiée."}
+                  </p>
+                </div>
               </div>
 
               {/* Row 2: Visual Step Evolution (Initiation & Workflow Stepper) */}

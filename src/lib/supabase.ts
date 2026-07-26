@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS risks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
+  causes TEXT,
+  consequences TEXT,
   category_id TEXT NOT NULL,
   entity_id TEXT NOT NULL,
   created_by TEXT NOT NULL,
@@ -145,6 +147,9 @@ CREATE TABLE IF NOT EXISTS risks (
   score_residuel INTEGER NOT NULL,
   history JSONB NOT NULL DEFAULT '[]'::jsonb
 );
+
+ALTER TABLE risks ADD COLUMN IF NOT EXISTS causes TEXT;
+ALTER TABLE risks ADD COLUMN IF NOT EXISTS consequences TEXT;
 
 -- 4. Table des Plans d'Actions
 CREATE TABLE IF NOT EXISTS action_plans (
@@ -388,6 +393,8 @@ const mapRiskToDb = (r: any) => ({
   id: r.id,
   title: r.title || '',
   description: r.description || '',
+  causes: r.causes || '',
+  consequences: r.consequences || r.consequence || '',
   category_id: r.categoryId || r.category_id || '',
   entity_id: r.entityId || r.entity_id || '',
   created_by: r.createdBy || r.created_by || '',
@@ -406,6 +413,8 @@ const mapRiskFromDb = (r: any) => ({
   id: r.id,
   title: r.title || '',
   description: r.description || '',
+  causes: r.causes || '',
+  consequences: r.consequences || r.consequence || '',
   categoryId: r.category_id || r.categoryId || '',
   entityId: r.entity_id || r.entityId || '',
   createdBy: r.created_by || r.createdBy || '',

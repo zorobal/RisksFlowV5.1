@@ -252,6 +252,8 @@ export interface Risk {
   id: string; // e.g. "R-001"
   title: string;
   description: string;
+  causes?: string;
+  consequences?: string;
   categoryId: string;
   entityId: string;
   createdBy: string;

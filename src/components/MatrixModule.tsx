@@ -25,7 +25,12 @@ import {
   Info,
   Layers,
   Download,
-  AlertCircle
+  AlertCircle,
+  Edit,
+  Edit3,
+  X,
+  Save,
+  AlertTriangle
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { Risk, TenantConfig, ActionPlan, MatrixThreshold } from '../types';
@@ -38,13 +43,15 @@ interface MatrixModuleProps {
   tenantConfig: TenantConfig;
   onAddLog: (action: string, details: string) => void;
   actions?: ActionPlan[]; // Optional actions to bind and compute dynamic trend
+  onUpdateRisk?: (risk: Risk) => void;
 }
 
 export default function MatrixModule({
   risks,
   tenantConfig,
   onAddLog,
-  actions = []
+  actions = [],
+  onUpdateRisk
 }: MatrixModuleProps) {
   const [matrixType, setMatrixType] = useState<'brut' | 'net'>('brut');
   const [selectedCell, setSelectedCell] = useState<{ y: number; x: number } | null>(null);
@@ -56,6 +63,35 @@ export default function MatrixModule({
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Edit Risk Modal State
+  const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCauses, setEditCauses] = useState('');
+  const [editConsequences, setEditConsequences] = useState('');
+
+  const handleOpenEditModal = (risk: Risk) => {
+    setEditingRisk(risk);
+    setEditTitle(risk.title || '');
+    setEditDesc(risk.description || '');
+    setEditCauses(risk.causes || '');
+    setEditConsequences(risk.consequences || '');
+  };
+
+  const handleSaveRiskEdit = () => {
+    if (!editingRisk || !onUpdateRisk) return;
+    const updatedRisk: Risk = {
+      ...editingRisk,
+      title: editTitle,
+      description: editDesc,
+      causes: editCauses,
+      consequences: editConsequences
+    };
+    onUpdateRisk(updatedRisk);
+    onAddLog('Mise à jour Risque', `Modification des champs Description, Causes et Conséquences pour le risque ${editingRisk.id}`);
+    setEditingRisk(null);
+  };
 
   // Refs for capture
   const standardMatrixRef = useRef<HTMLDivElement>(null);
@@ -210,6 +246,7 @@ export default function MatrixModule({
 
   // Structured consequences based on category for realistic printable detail
   const getRiskConsequences = (r: Risk) => {
+    if (r.consequences && r.consequences.trim()) return r.consequences;
     if (r.categoryId === 'cat_finance') return 'Pertes financières de trésorerie, pénalités contractuelles et impacts sur les marges.';
     if (r.categoryId === 'cat_operational') return 'Rupture d\'activité, retards de livraison, goulots d\'étranglements et insatisfaction client.';
     if (r.categoryId === 'cat_it') return 'Indisponibilité des serveurs, risque de piratage, violation de données confidentielles (RGPD).';
@@ -523,21 +560,24 @@ export default function MatrixModule({
                 <thead>
                   <tr className="bg-slate-100 text-slate-700 uppercase font-extrabold border-b border-slate-300">
                     <th className="py-2.5 px-3 border-r border-slate-200 w-12 text-center">ID</th>
-                    <th className="py-2.5 px-3 border-r border-slate-200 w-32">Nature / Catégorie</th>
-                    <th className="py-2.5 px-3 border-r border-slate-200">Description du Risque</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 w-28">Nature / Catégorie</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 min-w-[130px]">Intitulé du Risque</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Description Détaillée</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 min-w-[130px]">Causes</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 min-w-[130px]">Conséquences</th>
                     <th className="py-2.5 px-2 border-r border-slate-200 w-10 text-center">Grav (I)</th>
                     <th className="py-2.5 px-2 border-r border-slate-200 w-10 text-center">Prob (P)</th>
                     <th className="py-2.5 px-3 border-r border-slate-200 w-16 text-center">Crit (Brut)</th>
                     <th className="py-2.5 px-3 border-r border-slate-200 w-16 text-center">Net</th>
-                    <th className="py-2.5 px-3 border-r border-slate-200 w-44">Conséquences Potentielles</th>
                     <th className="py-2.5 px-2 border-r border-slate-200 w-14 text-center">Tendance</th>
-                    <th className="py-2.5 px-3 w-28">Responsable Métier</th>
+                    <th className="py-2.5 px-3 border-r border-slate-200 w-28">Responsable Métier</th>
+                    <th className="py-2.5 px-2 text-center w-12">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {filteredRisks.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-400">Aucun risque enregistré dans cette base de données client.</td>
+                      <td colSpan={13} className="py-8 text-center text-slate-400">Aucun risque enregistré dans cette base de données client.</td>
                     </tr>
                   ) : (
                     filteredRisks.map((risk) => {
@@ -554,9 +594,17 @@ export default function MatrixModule({
                             <p className="font-extrabold text-slate-800 truncate">{riskCategory}</p>
                             <p className="text-[7.5px] text-slate-400 truncate">{entityName}</p>
                           </td>
-                          <td className="py-2 px-3 border-r border-slate-200">
-                            <p className="font-extrabold text-slate-900 leading-tight">{risk.title}</p>
-                            <p className="text-slate-400 text-[8px] line-clamp-2 mt-0.5">{risk.description}</p>
+                          <td className="py-2 px-3 border-r border-slate-200 font-extrabold text-slate-900 leading-tight">
+                            {risk.title}
+                          </td>
+                          <td className="py-2 px-3 border-r border-slate-200 text-slate-600 text-[8.5px] leading-relaxed">
+                            {risk.description || <span className="text-slate-300 italic">Non renseignée</span>}
+                          </td>
+                          <td className="py-2 px-3 border-r border-slate-200 text-amber-900 text-[8.5px] leading-relaxed">
+                            {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
+                          </td>
+                          <td className="py-2 px-3 border-r border-slate-200 text-rose-900 text-[8.5px] leading-relaxed">
+                            {getRiskConsequences(risk)}
                           </td>
                           <td className="py-2 px-2 border-r border-slate-200 text-center font-bold text-slate-700">{risk.impactValue}</td>
                           <td className="py-2 px-2 border-r border-slate-200 text-center font-bold text-slate-700">{risk.frequencyValue}</td>
@@ -566,14 +614,22 @@ export default function MatrixModule({
                           <td className="py-2 px-3 border-r border-slate-200 text-center font-black" style={{ color: critNet.textColor }}>
                             {risk.scoreResiduel}
                           </td>
-                          <td className="py-2 px-3 border-r border-slate-200 text-slate-500 text-[8.5px] leading-tight">
-                            {getRiskConsequences(risk)}
-                          </td>
                           <td className="py-2 px-2 border-r border-slate-200 text-center">
                             <span className="font-extrabold text-[9px] text-slate-800">{trendObj.label}</span>
                           </td>
-                          <td className="py-2 px-3 text-slate-700 font-semibold truncate max-w-[110px]">
+                          <td className="py-2 px-3 border-r border-slate-200 text-slate-700 font-semibold truncate max-w-[110px]">
                             {risk.createdBy || 'Responsable GRC'}
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            {onUpdateRisk && (
+                              <button
+                                onClick={() => handleOpenEditModal(risk)}
+                                className="p-1 hover:bg-indigo-50 text-indigo-600 rounded transition"
+                                title="Modifier Description, Causes & Conséquences"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1213,22 +1269,25 @@ export default function MatrixModule({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 uppercase font-extrabold text-[9.5px] border-b border-slate-200">
-                  <th className="py-3 px-4 border-r border-slate-200 w-16 text-center">Code</th>
-                  <th className="py-3 px-4 border-r border-slate-200 w-44">Nature (Catégorie)</th>
-                  <th className="py-3 px-4 border-r border-slate-200">Description / Intitulé du Risque</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-14 text-center">Prob (P)</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-14 text-center">Grav (I)</th>
-                  <th className="py-3 px-4 border-r border-slate-200 w-24 text-center">Score Brut</th>
-                  <th className="py-3 px-4 border-r border-slate-200 w-24 text-center">Score Net</th>
-                  <th className="py-3 px-4 border-r border-slate-200 w-48">Conséquence</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Tendance</th>
-                  <th className="py-3 px-4 w-32">Responsable</th>
+                  <th className="py-3 px-3 border-r border-slate-200 w-14 text-center">Code</th>
+                  <th className="py-3 px-3 border-r border-slate-200 w-36">Nature (Catégorie)</th>
+                  <th className="py-3 px-3 border-r border-slate-200 min-w-[140px]">Intitulé du Risque</th>
+                  <th className="py-3 px-3 border-r border-slate-200 min-w-[160px]">Description Détaillée</th>
+                  <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Causes du Risque</th>
+                  <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Conséquences du Risque</th>
+                  <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Prob (P)</th>
+                  <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Grav (I)</th>
+                  <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Brut</th>
+                  <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Net</th>
+                  <th className="py-3 px-2 border-r border-slate-200 w-16 text-center">Tendance</th>
+                  <th className="py-3 px-3 border-r border-slate-200 w-28">Responsable</th>
+                  <th className="py-3 px-2 text-center w-16">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150 bg-white">
                 {filteredRisks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={13} className="py-12 text-center text-slate-400">
                       <ShieldAlert className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                       Aucun risque ne correspond à vos critères de recherche ou cette base client est vide.
                     </td>
@@ -1243,34 +1302,51 @@ export default function MatrixModule({
 
                     return (
                       <tr key={risk.id} className="hover:bg-slate-50/80 transition text-[11px]">
-                        <td className="py-2.5 px-4 border-r border-slate-200 font-mono font-black text-slate-900 text-center">{risk.id}</td>
-                        <td className="py-2.5 px-4 border-r border-slate-200 text-slate-600 font-semibold leading-tight">
+                        <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-black text-slate-900 text-center">{risk.id}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 font-semibold leading-tight">
                           <p className="font-extrabold text-slate-800">{categoryName}</p>
                           <p className="text-[8px] text-slate-400 mt-0.5 truncate">{entityName}</p>
                         </td>
-                        <td className="py-2.5 px-4 border-r border-slate-200">
-                          <p className="font-extrabold text-slate-900 leading-tight">{risk.title}</p>
-                          <p className="text-[10px] text-slate-400 leading-normal line-clamp-1 mt-0.5">{risk.description}</p>
+                        <td className="py-2.5 px-3 border-r border-slate-200 font-extrabold text-slate-900 leading-tight">
+                          {risk.title}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-bold text-slate-800">{risk.frequencyValue}</td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-bold text-slate-800">{risk.impactValue}</td>
-                        <td className="py-2.5 px-4 border-r border-slate-200 text-center font-black" style={{ color: critBrut.textColor }}>
-                          {risk.scoreBrut}
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-slate-700 text-[10px] leading-relaxed">
+                          {risk.description || <span className="text-slate-300 italic">Non renseignée</span>}
                         </td>
-                        <td className="py-2.5 px-4 border-r border-slate-200 text-center font-black" style={{ color: critNet.textColor }}>
-                          {risk.scoreResiduel}
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-amber-900 text-[10px] leading-relaxed">
+                          {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
                         </td>
-                        <td className="py-2.5 px-4 border-r border-slate-200 text-slate-500 leading-tight text-[10px]">
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-rose-900 text-[10px] leading-relaxed">
                           {getRiskConsequences(risk)}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center">
+                        <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.frequencyValue}</td>
+                        <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.impactValue}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critBrut.textColor }}>
+                          {risk.scoreBrut}
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critNet.textColor }}>
+                          {risk.scoreResiduel}
+                        </td>
+                        <td className="py-2.5 px-2 border-r border-slate-200 text-center">
                           <span className={`px-2 py-0.5 rounded text-[8.5px] font-extrabold flex items-center gap-1 justify-center ${trend.color}`}>
                             {trend.icon}
                             {trend.label}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 font-semibold text-slate-700 truncate max-w-[120px]">
+                        <td className="py-2.5 px-3 border-r border-slate-200 font-semibold text-slate-700 truncate max-w-[120px]">
                           {risk.createdBy || 'Responsable GRC'}
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          {onUpdateRisk && (
+                            <button
+                              onClick={() => handleOpenEditModal(risk)}
+                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold rounded text-[9.5px] flex items-center gap-1 mx-auto transition"
+                              title="Éditer Description, Causes & Conséquences"
+                            >
+                              <Edit className="w-3 h-3" />
+                              Éditer
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1281,6 +1357,103 @@ export default function MatrixModule({
           </div>
         </div>
       </div>
+
+      {/* QUICK EDIT RISK MODAL */}
+      {editingRisk && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-sm flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-indigo-400" />
+                  Édition du Risque [{editingRisk.id}]
+                </h3>
+                <p className="text-[11px] text-slate-300 font-medium">{editingRisk.title}</p>
+              </div>
+              <button 
+                onClick={() => setEditingRisk(null)}
+                className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Intitulé */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">Intitulé du Risque</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-semibold"
+                />
+              </div>
+
+              {/* Description Détaillée */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  Description Détaillée du Risque
+                </label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={3}
+                  placeholder="Explication détaillée du contexte et des scénarios du risque..."
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Causes du Risque */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  Causes du Risque (Facteurs déclencheurs)
+                </label>
+                <textarea
+                  value={editCauses}
+                  onChange={(e) => setEditCauses(e.target.value)}
+                  rows={3}
+                  placeholder="Origines, faiblesses de contrôle interne ou facteurs externes..."
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Conséquences du Risque */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-rose-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                  Conséquences du Risque (Impacts majeurs)
+                </label>
+                <textarea
+                  value={editConsequences}
+                  onChange={(e) => setEditConsequences(e.target.value)}
+                  rows={3}
+                  placeholder="Pertes financières, arrêts d'activité, sanctions réglementaires ou atteintes réputationnelles..."
+                  className="w-full bg-white border border-slate-300 text-slate-800 text-xs rounded p-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingRisk(null)}
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs rounded font-bold transition"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveRiskEdit}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded font-extrabold flex items-center gap-1.5 shadow-sm transition"
+              >
+                <Save className="w-4 h-4" />
+                Enregistrer les modifications
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
