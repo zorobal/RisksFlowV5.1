@@ -721,21 +721,23 @@ const mapHistoriqueLicenceFromDb = (h: any) => ({
 });
 
 const mapSessionToDb = (s: any) => ({
-  id: s.id,
+  id: String(s.id),
+  tenant_id: s.tenantId || s.tenant_id || undefined,
   annee: Number(s.annee || 2026),
-  date_debut: s.dateDebut || s.date_debut || '',
-  date_fin: s.dateFin || s.date_fin || '',
-  statut: s.statut || 'Ouverte',
+  date_debut: String(s.dateDebut || s.date_debut || ''),
+  date_fin: String(s.dateFin || s.date_fin || ''),
+  statut: String(s.statut || 'Ouverte'),
   date_cloture: s.dateCloture || s.date_cloture || null,
   bilan_annuel: s.bilanAnnuel || s.bilan_annuel || null,
 });
 
 const mapSessionFromDb = (s: any) => ({
-  id: s.id,
+  id: String(s.id),
+  tenantId: s.tenant_id || s.tenantId || undefined,
   annee: Number(s.annee || 2026),
-  dateDebut: s.date_debut || s.dateDebut || '',
-  dateFin: s.date_fin || s.dateFin || '',
-  statut: s.statut || 'Ouverte',
+  dateDebut: String(s.date_debut || s.dateDebut || ''),
+  dateFin: String(s.date_fin || s.dateFin || ''),
+  statut: (s.statut || 'Ouverte') as 'Ouverte' | 'Clôturée',
   dateCloture: s.date_cloture || s.dateCloture || undefined,
   bilanAnnuel: s.bilan_annuel || s.bilanAnnuel || undefined,
 });
@@ -775,7 +777,7 @@ export const pushAllToSupabase = async (
     const uniqueMap = new Map<string, any>();
     for (const item of mapped) {
       if (item && item.id) {
-        uniqueMap.set(item.id, item);
+        uniqueMap.set(String(item.id), item);
       }
     }
     let payload = Array.from(uniqueMap.values());
@@ -793,14 +795,14 @@ export const pushAllToSupabase = async (
       }
 
       lastError = error;
-      const errMsg = error.message || '';
+      const errMsg = String(error.message || '');
 
-      // Check if the error is due to a missing column in Supabase schema (e.g. tenant_id, causes, consequences)
+      // Check if the error is due to a missing column in Supabase schema (e.g. tenant_id, causes, consequences, date_cloture)
       const sampleKeys = Object.keys(payload[0] || {});
       let missingCol: string | null = null;
 
       for (const key of sampleKeys) {
-        if (key !== 'id' && (errMsg.includes(`'${key}'`) || errMsg.includes(`"${key}"`) || errMsg.includes(` ${key} `))) {
+        if (key !== 'id' && (errMsg.includes(`'${key}'`) || errMsg.includes(`"${key}"`) || errMsg.includes(` ${key} `) || errMsg.includes(`column ${key}`))) {
           missingCol = key;
           break;
         }
@@ -815,7 +817,7 @@ export const pushAllToSupabase = async (
         });
       } else {
         // Fallback: strip known optional columns if not already stripped
-        const knownOptional = ['tenant_id', 'causes', 'consequences'];
+        const knownOptional = ['tenant_id', 'causes', 'consequences', 'date_cloture', 'bilan_annuel'];
         let strippedAny = false;
         payload = payload.map(row => {
           const newRow = { ...row };
@@ -833,10 +835,44 @@ export const pushAllToSupabase = async (
       }
     }
 
+    // If bulk upsert failed, try row-by-row fallback
     if (lastError) {
-      errorCount++;
-      results.push(`Échec sur "${tableName}" : ${lastError.message} (${lastError.code})`);
-      console.error(`Error syncing table ${tableName}:`, lastError);
+      let successCount = 0;
+      let lastRowErr: any = null;
+      for (const row of payload) {
+        const { error: rowErr } = await client.from(tableName).upsert([row]);
+        if (!rowErr) {
+          successCount++;
+        } else {
+          lastRowErr = rowErr;
+        }
+      }
+      if (successCount > 0) {
+        if (successCount === payload.length) {
+          lastError = null;
+        } else {
+          console.warn(`[Supabase Push Partial Success] ${successCount}/${payload.length} rows inserted into "${tableName}".`);
+        }
+      }
+    }
+
+    if (lastError) {
+      const errMsg = String(lastError.message || '');
+      const isMissingTable =
+        lastError.code === '42P01' ||
+        lastError.code === 'PGRST204' ||
+        errMsg.includes('does not exist') ||
+        errMsg.includes('schema cache') ||
+        errMsg.includes('Could not find');
+
+      if (isMissingTable) {
+        console.warn(`[Supabase Push Warning] Table "${tableName}" does not exist in Supabase database yet. Please run the SQL initialization script in SuperAdmin > Supabase.`);
+        results.push(`Avertissement : La table "${tableName}" n'existe pas encore dans Supabase.`);
+      } else {
+        errorCount++;
+        results.push(`Échec sur "${tableName}" : ${lastError.message} (${lastError.code || 'ERR'})`);
+        console.warn(`[Supabase Sync Warning] Table ${tableName}:`, lastError);
+      }
     } else {
       results.push(`Sinc. réussie : "${tableName}" (${items.length} lignes)`);
     }
