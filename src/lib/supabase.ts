@@ -145,11 +145,13 @@ CREATE TABLE IF NOT EXISTS risks (
   control_value INTEGER NOT NULL,
   score_brut INTEGER NOT NULL,
   score_residuel INTEGER NOT NULL,
+  tenant_id TEXT,
   history JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
 ALTER TABLE risks ADD COLUMN IF NOT EXISTS causes TEXT;
 ALTER TABLE risks ADD COLUMN IF NOT EXISTS consequences TEXT;
+ALTER TABLE risks ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 
 -- 4. Table des Plans d'Actions
 CREATE TABLE IF NOT EXISTS action_plans (
@@ -161,8 +163,11 @@ CREATE TABLE IF NOT EXISTS action_plans (
   due_date TEXT NOT NULL,
   priority TEXT NOT NULL,
   status TEXT NOT NULL,
-  progress INTEGER NOT NULL DEFAULT 0
+  progress INTEGER NOT NULL DEFAULT 0,
+  tenant_id TEXT
 );
+
+ALTER TABLE action_plans ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 
 -- 5. Table des Logs d'Audit GRC
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -739,14 +744,65 @@ export const pushAllToSupabase = async (
         uniqueMap.set(item.id, item);
       }
     }
-    const deduplicated = Array.from(uniqueMap.values());
-    
-    // Using upsert with standard id column
-    const { error } = await client.from(tableName).upsert(deduplicated);
-    if (error) {
+    let payload = Array.from(uniqueMap.values());
+    if (payload.length === 0) return;
+
+    let attempts = 0;
+    let lastError: any = null;
+
+    while (attempts < 4) {
+      attempts++;
+      const { error } = await client.from(tableName).upsert(payload);
+      if (!error) {
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+      const errMsg = error.message || '';
+
+      // Check if the error is due to a missing column in Supabase schema (e.g. tenant_id, causes, consequences)
+      const sampleKeys = Object.keys(payload[0] || {});
+      let missingCol: string | null = null;
+
+      for (const key of sampleKeys) {
+        if (key !== 'id' && (errMsg.includes(`'${key}'`) || errMsg.includes(`"${key}"`) || errMsg.includes(` ${key} `))) {
+          missingCol = key;
+          break;
+        }
+      }
+
+      if (missingCol) {
+        console.warn(`[Supabase Sync Schema Fix] Column "${missingCol}" does not exist in table "${tableName}". Retrying without column...`);
+        payload = payload.map(row => {
+          const newRow = { ...row };
+          delete newRow[missingCol!];
+          return newRow;
+        });
+      } else {
+        // Fallback: strip known optional columns if not already stripped
+        const knownOptional = ['tenant_id', 'causes', 'consequences'];
+        let strippedAny = false;
+        payload = payload.map(row => {
+          const newRow = { ...row };
+          for (const col of knownOptional) {
+            if (col in newRow) {
+              delete newRow[col];
+              strippedAny = true;
+            }
+          }
+          return newRow;
+        });
+        if (!strippedAny) {
+          break;
+        }
+      }
+    }
+
+    if (lastError) {
       errorCount++;
-      results.push(`Échec sur "${tableName}" : ${error.message} (${error.code})`);
-      console.error(`Error syncing table ${tableName}:`, error);
+      results.push(`Échec sur "${tableName}" : ${lastError.message} (${lastError.code})`);
+      console.error(`Error syncing table ${tableName}:`, lastError);
     } else {
       results.push(`Sinc. réussie : "${tableName}" (${items.length} lignes)`);
     }
