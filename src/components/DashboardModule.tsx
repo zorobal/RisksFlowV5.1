@@ -27,7 +27,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
-import { getCriticalityFromThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, COLOR_PRESETS } from '../utils/riskUtils';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
@@ -219,7 +219,7 @@ export default function DashboardModule({
 
   // Helper to categorize criticality
   const getCriticality = (score: number) => {
-    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds || []);
   };
 
   const criticalRisksCount = useMemo(() => {
@@ -231,7 +231,7 @@ export default function DashboardModule({
 
   // Criticality Breakdown
   const criticalityCounts = useMemo(() => {
-    return tenantConfig.matrixThresholds.map(t => {
+    return (tenantConfig.matrixThresholds || []).map(t => {
       const count = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label).length;
       return {
         label: t.label,
@@ -274,15 +274,16 @@ export default function DashboardModule({
   // 1. Entity Breakdown (Risques par Unité - Pie / Donut Chart Data)
   const entityBreakdown = useMemo(() => {
     if (totalRisks === 0) return [];
-    const map = new Map<string, { id: string; name: string; count: number }>();
+    const map = new Map<string, { id: string; code: string; name: string; count: number }>();
 
     filteredRisks.forEach(r => {
       const entId = r.entityId || 'unassigned';
       const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entCode = entObj?.code || entObj?.name || (entId === 'unassigned' ? 'N/A' : entId);
       const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté / Unité inconnue' : entId);
 
       if (!map.has(entId)) {
-        map.set(entId, { id: entId, name: entName, count: 0 });
+        map.set(entId, { id: entId, code: entCode, name: entName, count: 0 });
       }
       map.get(entId)!.count += 1;
     });
@@ -338,7 +339,7 @@ export default function DashboardModule({
 
   // 3. Strategic Decision Chart 2: Remediation & Action Plan Coverage by Criticality Level
   const criticalityActionCoverage = useMemo(() => {
-    return tenantConfig.matrixThresholds.map(t => {
+    return (tenantConfig.matrixThresholds || []).map(t => {
       const levelRisks = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label);
       const totalCount = levelRisks.length;
       
@@ -372,6 +373,7 @@ export default function DashboardModule({
 
     const entityMap = new Map<string, {
       id: string;
+      code: string;
       name: string;
       total: number;
       maxScore: number;
@@ -382,11 +384,13 @@ export default function DashboardModule({
     filteredRisks.forEach(r => {
       const entId = r.entityId || 'unassigned';
       const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entCode = entObj?.code || entObj?.name || (entId === 'unassigned' ? 'N/A' : entId);
       const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté' : entId);
 
       if (!entityMap.has(entId)) {
         entityMap.set(entId, {
           id: entId,
+          code: entCode,
           name: entName,
           total: 0,
           maxScore: 0,
@@ -431,6 +435,7 @@ export default function DashboardModule({
 
     const entityMap = new Map<string, {
       id: string;
+      code: string;
       name: string;
       total: number;
       catCounts: { id: string; name: string; color: string; count: number; percentage: number }[];
@@ -439,11 +444,13 @@ export default function DashboardModule({
     filteredRisks.forEach(r => {
       const entId = r.entityId || 'unassigned';
       const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entCode = entObj?.code || entObj?.name || (entId === 'unassigned' ? 'N/A' : entId);
       const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté' : entId);
 
       if (!entityMap.has(entId)) {
         entityMap.set(entId, {
           id: entId,
+          code: entCode,
           name: entName,
           total: 0,
           catCounts: catWithColor.map(c => ({
@@ -483,14 +490,27 @@ export default function DashboardModule({
 
   // Matrix Cell color functions
   const getVibrantColors = (critLabel: string) => {
+    const match = (tenantConfig.matrixThresholds || []).find(t => t.label === critLabel);
+    if (match) {
+      const preset = COLOR_PRESETS.find(p => p.colorClass === match.color);
+      if (preset) {
+        return { bg: preset.bgColorHex, border: preset.textColor + '60', text: preset.textColor };
+      }
+      if (match.textColor) {
+        return { bg: '#F8FAFC', border: match.textColor + '80', text: match.textColor };
+      }
+    }
     const labelLower = critLabel.toLowerCase();
-    if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas')) {
-      return { bg: '#E6FAF0', border: '#10B981', text: '#047857' }; // Soft green
+    if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas') || labelLower.includes('très faible')) {
+      return { bg: '#E6FAF0', border: '#10B981', text: '#047857' };
     }
     if (labelLower.includes('modéré') || labelLower.includes('moyen') || labelLower.includes('significatif')) {
-      return { bg: '#FFFBEB', border: '#F59E0B', text: '#B45309' }; // Soft yellow
+      return { bg: '#FFFBEB', border: '#F59E0B', text: '#B45309' };
     }
-    return { bg: '#FEF2F2', border: '#EF4444', text: '#B91C1C' }; // Soft red
+    if (labelLower.includes('élevé') || labelLower.includes('fort')) {
+      return { bg: '#FFEDD5', border: '#EA580C', text: '#C2410C' };
+    }
+    return { bg: '#FEF2F2', border: '#EF4444', text: '#B91C1C' };
   };
 
   // Helper to determine cell criticality label
@@ -642,11 +662,11 @@ ${
 
 ### Section 4.1 : Inscription des Effectifs de Risques par Seuil et par Unité Organisationnelle
 
-| Unité / Entité (Axe X) | Total Risques | Score Net Moyen | Score Max | ${tenantConfig.matrixThresholds.map(t => t.label).join(' | ')} |
-| :--- | :---: | :---: | :---: | ${tenantConfig.matrixThresholds.map(() => ':---:').join(' | ')} |
+| Unité / Entité (Axe X) | Total Risques | Score Net Moyen | Score Max | ${(tenantConfig.matrixThresholds || []).map(t => t.label).join(' | ')} |
+| :--- | :---: | :---: | :---: | ${(tenantConfig.matrixThresholds || []).map(() => ':---:').join(' | ')} |
 ${
   unitCriticalityBreakdown.length === 0
-    ? '| Aucune unité | 0 | 0 | 0 | ' + tenantConfig.matrixThresholds.map(() => '0').join(' | ') + ' |'
+    ? '| Aucune unité | 0 | 0 | 0 | ' + (tenantConfig.matrixThresholds || []).map(() => '0').join(' | ') + ' |'
     : unitCriticalityBreakdown.map(u => {
         const levelCols = u.levelCounts.map(l => `**${l.count}**`).join(' | ');
         return `| **${u.name}** | **${u.total}** | ${u.avgScore} | ${u.maxScore} | ${levelCols} |`;
@@ -1334,8 +1354,8 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                             {item.count}
                           </span>
                         </div>
-                        <span className="text-[9px] font-bold text-slate-700 truncate w-full text-center mt-1.5" title={item.name}>
-                          {item.name.length > 8 ? item.name.slice(0, 8) + '…' : item.name}
+                        <span className="text-[9.5px] font-extrabold text-slate-700 truncate w-full text-center mt-1.5 font-mono" title={`${item.code} - ${item.name}`}>
+                          {item.code}
                         </span>
                       </div>
                     );
@@ -1349,7 +1369,9 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                   <div key={item.id} className="flex items-center justify-between bg-slate-50 border border-slate-150 p-2 rounded-lg">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
-                      <span className="font-bold text-slate-700 truncate" title={item.name}>{item.name}</span>
+                      <span className="font-bold text-slate-700 truncate" title={`${item.code} - ${item.name}`}>
+                        <strong className="font-mono text-indigo-900 mr-1">{item.code}</strong> {item.name}
+                      </span>
                     </div>
                     <span className="font-extrabold text-slate-900 font-mono bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0 ml-1">
                       {item.count} ({item.percentage}%)
@@ -1455,7 +1477,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                             <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end z-10 group relative min-w-0">
                               {/* Hover Tooltip */}
                               <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-30 whitespace-nowrap">
-                                <div>{u.name}</div>
+                                <div><span className="font-mono text-indigo-300 mr-1">{u.code}</span> - {u.name}</div>
                                 <div className="text-orange-300 font-mono">Total : {u.total} ({u.pct}% du global)</div>
                               </div>
 
@@ -1495,8 +1517,8 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
 
                               {/* X-Axis Entity Label */}
                               <div className="absolute -bottom-6 w-full text-center">
-                                <span className="text-[9.5px] font-extrabold text-slate-800 block truncate" title={u.name}>
-                                  {u.name.length > 7 ? u.name.slice(0, 7) : u.name}
+                                <span className="text-[9.5px] font-extrabold text-slate-800 block truncate font-mono" title={`${u.code} - ${u.name}`}>
+                                  {u.code}
                                 </span>
                               </div>
                             </div>
@@ -1616,7 +1638,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
               {/* Threshold Legend Bar */}
               <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-100 text-[9.5px]">
                 <span className="font-bold text-slate-400">Seuils Y :</span>
-                {tenantConfig.matrixThresholds.map((t, i) => (
+                {(tenantConfig.matrixThresholds || []).map((t, i) => (
                   <span key={i} className="flex items-center gap-1 font-bold px-1.5 py-0.5 rounded border border-slate-150" style={{ backgroundColor: `${t.color}20`, color: t.textColor }}>
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }}></span>
                     {t.label}
@@ -1647,7 +1669,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                         <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end group relative">
                           {/* Total tooltip */}
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none shadow-md z-10 whitespace-nowrap">
-                            {u.name} : {u.total} risque(s)
+                            <span className="font-mono text-indigo-300 mr-1">{u.code}</span> - {u.name} : {u.total} risque(s)
                           </div>
 
                           {/* Stacked Vertical Column with Inscribed Numbers */}
@@ -1663,7 +1685,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                                   key={idx}
                                   style={{ height: `${segPct}%`, backgroundColor: level.color }}
                                   className="w-full flex items-center justify-center transition-all duration-300 relative"
-                                  title={`${u.name} - ${level.label}: ${level.count}`}
+                                  title={`${u.code} (${u.name}) - ${level.label}: ${level.count}`}
                                 >
                                   {/* Inscribed number inside bar segment */}
                                   <span 
@@ -1677,10 +1699,10 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                             })}
                           </div>
 
-                          {/* X-Axis Label (Unit Name) */}
+                          {/* X-Axis Label (Unit Code) */}
                           <div className="absolute -bottom-6 w-full text-center">
-                            <span className="text-[9px] font-bold text-slate-700 block truncate" title={u.name}>
-                              {u.name.length > 7 ? u.name.slice(0, 7) + '…' : u.name}
+                            <span className="text-[9px] font-bold text-slate-700 block truncate font-mono" title={`${u.code} - ${u.name}`}>
+                              {u.code}
                             </span>
                           </div>
                         </div>
@@ -1916,6 +1938,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                   <div className="flex justify-between items-center text-[11px]">
                     <div className="flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span className="font-mono font-bold text-indigo-900 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-[10px]">{u.code}</span>
                       <span className="font-extrabold text-slate-900">{u.name}</span>
                     </div>
                     <span className="font-mono text-[10.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
