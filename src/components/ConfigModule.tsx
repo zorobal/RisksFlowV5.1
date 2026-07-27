@@ -203,6 +203,7 @@ export default function ConfigModule({
 
   // Selected Graduation Preset Tab (3, 4, 5, 6...)
   const [selectedGraduationTab, setSelectedGraduationTab] = useState<number>(() => tenantConfig.matrixThresholds?.length || 3);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (tenantConfig?.matrixThresholds?.length) {
@@ -909,6 +910,45 @@ export default function ConfigModule({
       ...tenantConfig,
       scales: nextScales
     });
+  };
+
+  const handleAddScaleItem = (type: 'freq' | 'imp' | 'ctrl') => {
+    const nextScales = { ...tenantConfig.scales };
+    if (type === 'freq') {
+      const len = nextScales.frequency.length;
+      nextScales.frequency = [...nextScales.frequency, { value: len + 1, label: `Niveau ${len + 1}`, description: `Description du niveau ${len + 1}` }];
+    } else if (type === 'imp') {
+      const len = nextScales.impact.length;
+      nextScales.impact = [...nextScales.impact, { value: len + 1, label: `Niveau ${len + 1}`, description: `Description du niveau ${len + 1}` }];
+    } else {
+      const len = nextScales.control.length;
+      nextScales.control = [...nextScales.control, { value: len + 1, label: `Niveau ${len + 1}`, description: `Description du niveau ${len + 1}` }];
+    }
+    onUpdateTenantConfig({ ...tenantConfig, scales: nextScales });
+    onAddLog('Config Moteur', `Ajout d'un niveau d'échelle de cotation pour ${type.toUpperCase()}`);
+  };
+
+  const handleRemoveScaleItem = (type: 'freq' | 'imp' | 'ctrl', index: number) => {
+    const nextScales = { ...tenantConfig.scales };
+    if (type === 'freq') {
+      if (nextScales.frequency.length <= 2) return;
+      nextScales.frequency = nextScales.frequency.filter((_, i) => i !== index).map((item, idx) => ({ ...item, value: idx + 1 }));
+    } else if (type === 'imp') {
+      if (nextScales.impact.length <= 2) return;
+      nextScales.impact = nextScales.impact.filter((_, i) => i !== index).map((item, idx) => ({ ...item, value: idx + 1 }));
+    } else {
+      if (nextScales.control.length <= 2) return;
+      nextScales.control = nextScales.control.filter((_, i) => i !== index).map((item, idx) => ({ ...item, value: idx + 1 }));
+    }
+    onUpdateTenantConfig({ ...tenantConfig, scales: nextScales });
+    onAddLog('Config Moteur', `Suppression d'un niveau d'échelle de cotation pour ${type.toUpperCase()}`);
+  };
+
+  const handleValidateAndSaveConfig = () => {
+    onUpdateTenantConfig({ ...tenantConfig });
+    onAddLog('Config Moteur', `Validation globale des Paramètres de Notation & Cotation (Matrice ${tenantConfig.matrixSize}x${tenantConfig.matrixSize}, ${tenantConfig.matrixThresholds.length} seuils, Formule ${tenantConfig.formula.name}).`);
+    setSaveSuccessMessage(`✅ Paramètres de Notation & Cotation validés et enregistrés avec succès dans la BDD Supabase ! (Matrice ${tenantConfig.matrixSize}×${tenantConfig.matrixSize})`);
+    setTimeout(() => setSaveSuccessMessage(null), 6000);
   };
 
   // --- Category Management ---
@@ -2976,41 +3016,92 @@ export default function ConfigModule({
           {/* TAB 2: RATING SCALES EDITING */}
           {activeTab === 'scales' && (
             <div className="space-y-6">
-              <div className="border-b border-slate-100 pb-3 flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-sm text-slate-800">Échelles de Cotation et Description des Seuils</h3>
-                  <p className="text-slate-400 text-[10.5px]">Configurez la signification textuelle de chaque niveau de cotation (Variables de probabilité, impact et maîtrise).</p>
+              {/* Top Banner with Matrix Size & Save Button */}
+              <div className="p-4 bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-indigo-400" />
+                    Échelles de Cotation & Dimension Matrice ({tenantConfig.matrixSize}×{tenantConfig.matrixSize})
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Définissez la dimension de la matrice, les libellés et descriptions des échelles (P, I, M).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <span className="text-[11px] text-slate-300 font-bold">Dimension Matrice :</span>
+                    <select
+                      value={matrixSize}
+                      onChange={(e) => handleMatrixSizeUpdate(Number(e.target.value))}
+                      className="bg-slate-900 text-indigo-300 font-extrabold text-xs px-2 py-1 rounded border border-indigo-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="3">3 × 3 (Score Max: 9)</option>
+                      <option value="4">4 × 4 (Score Max: 16)</option>
+                      <option value="5">5 × 5 (Score Max: 25)</option>
+                      <option value="6">6 × 6 (Score Max: 36)</option>
+                      <option value="7">7 × 7 (Score Max: 49)</option>
+                      <option value="10">10 × 10 (Score Max: 100)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleValidateAndSaveConfig}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Valider & Enregistrer
+                  </button>
                 </div>
               </div>
 
+              {saveSuccessMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-lg shadow-sm flex items-center justify-between">
+                  <span>{saveSuccessMessage}</span>
+                  <button onClick={() => setSaveSuccessMessage(null)} className="text-emerald-700 hover:text-emerald-900 font-extrabold text-sm cursor-pointer">✕</button>
+                </div>
+              )}
+
               {/* Variables scale type selector */}
-              <div className="flex bg-slate-100 rounded p-0.5 max-w-sm border border-slate-200">
+              <div className="flex items-center justify-between flex-wrap gap-3 border-b border-slate-100 pb-3">
+                <div className="flex bg-slate-100 rounded p-0.5 max-w-sm border border-slate-200">
+                  <button
+                    onClick={() => setActiveScaleType('freq')}
+                    className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition cursor-pointer ${activeScaleType === 'freq' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Probabilité / Fréquence (P)
+                  </button>
+                  <button
+                    onClick={() => setActiveScaleType('imp')}
+                    className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition cursor-pointer ${activeScaleType === 'imp' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Gravité / Impact (I)
+                  </button>
+                  <button
+                    onClick={() => setActiveScaleType('ctrl')}
+                    className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition cursor-pointer ${activeScaleType === 'ctrl' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Niveau Maîtrise (M)
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setActiveScaleType('freq')}
-                  className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition ${activeScaleType === 'freq' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  type="button"
+                  onClick={() => handleAddScaleItem(activeScaleType)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition shadow-2xs flex items-center gap-1 cursor-pointer"
                 >
-                  Probabilité / Fréquence (P)
-                </button>
-                <button
-                  onClick={() => setActiveScaleType('imp')}
-                  className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition ${activeScaleType === 'imp' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Gravité / Impact (I)
-                </button>
-                <button
-                  onClick={() => setActiveScaleType('ctrl')}
-                  className={`flex-1 py-1 px-3 text-center rounded text-xs font-bold transition ${activeScaleType === 'ctrl' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Niveau Maîtrise (M)
+                  <Plus className="w-3.5 h-3.5" />
+                  Ajouter un Niveau d'Échelle ({activeScaleType.toUpperCase()})
                 </button>
               </div>
 
               {/* Editing block layout */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {activeScaleType === 'freq' && tenantConfig.scales.frequency.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
-                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2 py-1.5 rounded-full border shadow-inner">
+                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
                         {item.value}
                       </span>
                     </div>
@@ -3019,24 +3110,36 @@ export default function ConfigModule({
                         type="text" 
                         value={item.label}
                         onChange={(e) => handleUpdateScaleLabel('freq', idx, 'label', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded font-bold text-xs" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded font-bold text-xs focus:ring-1 focus:ring-indigo-500" 
                       />
                     </div>
-                    <div className="col-span-8">
+                    <div className="col-span-7">
                       <input 
                         type="text" 
                         value={item.description}
                         onChange={(e) => handleUpdateScaleLabel('freq', idx, 'description', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded text-slate-500" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded text-xs text-slate-600 focus:ring-1 focus:ring-indigo-500" 
                       />
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {tenantConfig.scales.frequency.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveScaleItem('freq', idx)}
+                          className="p-1 hover:bg-rose-50 text-rose-500 rounded transition cursor-pointer"
+                          title="Supprimer ce niveau"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
 
                 {activeScaleType === 'imp' && tenantConfig.scales.impact.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
-                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2 py-1.5 rounded-full border shadow-inner">
+                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
                         {item.value}
                       </span>
                     </div>
@@ -3045,24 +3148,36 @@ export default function ConfigModule({
                         type="text" 
                         value={item.label}
                         onChange={(e) => handleUpdateScaleLabel('imp', idx, 'label', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded font-bold text-xs" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded font-bold text-xs focus:ring-1 focus:ring-indigo-500" 
                       />
                     </div>
-                    <div className="col-span-8">
+                    <div className="col-span-7">
                       <input 
                         type="text" 
                         value={item.description}
                         onChange={(e) => handleUpdateScaleLabel('imp', idx, 'description', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded text-slate-500" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded text-xs text-slate-600 focus:ring-1 focus:ring-indigo-500" 
                       />
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {tenantConfig.scales.impact.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveScaleItem('imp', idx)}
+                          className="p-1 hover:bg-rose-50 text-rose-500 rounded transition cursor-pointer"
+                          title="Supprimer ce niveau"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
 
                 {activeScaleType === 'ctrl' && tenantConfig.scales.control.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
-                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2 py-1.5 rounded-full border shadow-inner">
+                      <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
                         {item.value}
                       </span>
                     </div>
@@ -3071,16 +3186,28 @@ export default function ConfigModule({
                         type="text" 
                         value={item.label}
                         onChange={(e) => handleUpdateScaleLabel('ctrl', idx, 'label', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded font-bold text-xs" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded font-bold text-xs focus:ring-1 focus:ring-indigo-500" 
                       />
                     </div>
-                    <div className="col-span-8">
+                    <div className="col-span-7">
                       <input 
                         type="text" 
                         value={item.description}
                         onChange={(e) => handleUpdateScaleLabel('ctrl', idx, 'description', e.target.value)}
-                        className="w-full bg-white border border-slate-200 p-1 rounded text-slate-500" 
+                        className="w-full bg-white border border-slate-250 p-1.5 rounded text-xs text-slate-600 focus:ring-1 focus:ring-indigo-500" 
                       />
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {tenantConfig.scales.control.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveScaleItem('ctrl', idx)}
+                          className="p-1 hover:bg-rose-50 text-rose-500 rounded transition cursor-pointer"
+                          title="Supprimer ce niveau"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -3342,24 +3469,52 @@ export default function ConfigModule({
           {/* TAB 3.5: GRADUATION & MATRIX THRESHOLDS */}
           {activeTab === 'thresholds' && (
             <div className="space-y-6 text-left">
-              <div className="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-3">
-                <div>
-                  <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-indigo-600" />
-                    Paramétrage de la Graduation & des Seuils de Criticité
+              {/* Top Banner with Matrix Size & Save Button */}
+              <div className="p-4 bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-indigo-400" />
+                    Graduation & Seuils de Criticité ({tenantConfig.matrixSize}×{tenantConfig.matrixSize})
                   </h3>
-                  <p className="text-slate-500 text-[11px] mt-0.5">
-                    Définissez le nombre de niveaux de gravité (ex: 3, 4, 5 ou 6 niveaux), les plages de criticité (score min / max), les couleurs d'affichage et les consignes de traitement.
+                  <p className="text-[11px] text-slate-300">
+                    Définissez la dimension de la matrice, les plages de score (Min - Max), la palette de couleurs et les consignes de traitement.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 font-bold text-xs">Matrice active :</span>
-                  <span className="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-md font-extrabold text-xs border border-indigo-200">
-                    {tenantConfig.matrixSize} × {tenantConfig.matrixSize} (Score Max : {tenantConfig.matrixSize * tenantConfig.matrixSize})
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <span className="text-[11px] text-slate-300 font-bold">Dimension Matrice :</span>
+                    <select
+                      value={matrixSize}
+                      onChange={(e) => handleMatrixSizeUpdate(Number(e.target.value))}
+                      className="bg-slate-900 text-indigo-300 font-extrabold text-xs px-2 py-1 rounded border border-indigo-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="3">3 × 3 (Score Max: 9)</option>
+                      <option value="4">4 × 4 (Score Max: 16)</option>
+                      <option value="5">5 × 5 (Score Max: 25)</option>
+                      <option value="6">6 × 6 (Score Max: 36)</option>
+                      <option value="7">7 × 7 (Score Max: 49)</option>
+                      <option value="10">10 × 10 (Score Max: 100)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleValidateAndSaveConfig}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Valider & Enregistrer
+                  </button>
                 </div>
               </div>
+
+              {saveSuccessMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-lg shadow-sm flex items-center justify-between">
+                  <span>{saveSuccessMessage}</span>
+                  <button onClick={() => setSaveSuccessMessage(null)} className="text-emerald-700 hover:text-emerald-900 font-extrabold text-sm cursor-pointer">✕</button>
+                </div>
+              )}
 
               {/* Preset Graduation Generator Header */}
               <div className="p-4 bg-gradient-to-r from-indigo-50/80 to-slate-50 rounded-xl border border-indigo-100 space-y-3">

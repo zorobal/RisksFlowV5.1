@@ -1745,7 +1745,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                         <div className="flex-1 bg-slate-200 h-4 rounded-md overflow-hidden flex items-center shadow-2xs">
                           <div 
                             className="bg-amber-500 h-full rounded-md transition-all duration-500 flex items-center justify-end pr-2"
-                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgBrut / 64) * 100))}%` }}
+                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgBrut / ((tenantConfig.matrixSize || 4) * (tenantConfig.matrixSize || 4))) * 100))}%` }}
                           >
                             <span className="text-[10px] font-extrabold text-white font-mono leading-none">
                               {cat.avgBrut}
@@ -1760,7 +1760,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                         <div className="flex-1 bg-slate-200 h-4 rounded-md overflow-hidden flex items-center shadow-2xs">
                           <div 
                             className="bg-emerald-500 h-full rounded-md transition-all duration-500 flex items-center justify-end pr-2"
-                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgResiduel / 64) * 100))}%` }}
+                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgResiduel / ((tenantConfig.matrixSize || 4) * (tenantConfig.matrixSize || 4))) * 100))}%` }}
                           >
                             <span className="text-[10px] font-extrabold text-white font-mono leading-none">
                               {cat.avgResiduel}

@@ -125,27 +125,27 @@ export default function MatrixModule({
   const freqValues = Array.from({ length: size }, (_, i) => size - i); // e.g. 5, 4, 3, 2, 1
   const impactValues = Array.from({ length: size }, (_, i) => i + 1); // e.g. 1, 2, 3, 4, 5
 
-  // Dynamic Brut Brackets based on matrixSize
+  // Dynamic Brut Brackets based on configured tenantConfig.matrixThresholds
   const getBrutBrackets = () => {
-    if (size === 5) {
-      return [
-        { label: 'Sévère (20-25)', min: 20, max: 25 },
-        { label: 'Majeur (13-19)', min: 13, max: 19 },
-        { label: 'Modéré (6-12)', min: 6, max: 12 },
-        { label: 'Faible (1-5)', min: 1, max: 5 }
-      ];
-    } else {
-      return [
-        { label: 'Sévère (12-16)', min: 12, max: 16 },
-        { label: 'Majeur (8-11)', min: 8, max: 11 },
-        { label: 'Modéré (4-7)', min: 4, max: 7 },
-        { label: 'Faible (1-3)', min: 1, max: 3 }
-      ];
+    if (tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0) {
+      return [...tenantConfig.matrixThresholds]
+        .sort((a, b) => b.minScore - a.minScore)
+        .map(t => ({
+          label: `${t.label} (${t.minScore}-${t.maxScore})`,
+          min: t.minScore,
+          max: t.maxScore
+        }));
     }
+    return [
+      { label: `Sévère (${Math.round(size * size * 0.75)}-${size * size})`, min: Math.round(size * size * 0.75), max: size * size },
+      { label: `Majeur (${Math.round(size * size * 0.5)}-${Math.round(size * size * 0.75) - 1})`, min: Math.round(size * size * 0.5), max: Math.round(size * size * 0.75) - 1 },
+      { label: `Modéré (${Math.round(size * size * 0.25)}-${Math.round(size * size * 0.5) - 1})`, min: Math.round(size * size * 0.25), max: Math.round(size * size * 0.5) - 1 },
+      { label: `Faible (1-${Math.round(size * size * 0.25) - 1})`, min: 1, max: Math.round(size * size * 0.25) - 1 }
+    ];
   };
 
   const brutBrackets = getBrutBrackets();
-  const controlValues = Array.from({ length: size === 5 ? 5 : 4 }, (_, i) => i + 1);
+  const controlValues = Array.from({ length: size }, (_, i) => i + 1);
 
   // Dynamic color resolution matching customizable tenantConfig.matrixThresholds
   const getThresholdStyle = (crit: MatrixThreshold) => {

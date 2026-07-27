@@ -188,19 +188,19 @@ export default function App() {
       } else if (dbT && !localT) {
         merged.push(dbT);
       } else if (localT && dbT) {
-        // Merge DB and Local: if local has custom scales, thresholds, or formula, combine them intelligently
+        // DB is the single source of truth for organization parameters when present in Supabase
         merged.push({
-          ...dbT,
           ...localT,
+          ...dbT,
           companyName: dbT.companyName || localT.companyName,
           logoUrl: dbT.logoUrl || localT.logoUrl,
-          scales: (localT.scales?.frequency?.length ? localT.scales : dbT.scales) || dbT.scales || localT.scales,
-          matrixSize: localT.matrixSize || dbT.matrixSize || 4,
-          matrixThresholds: (localT.matrixThresholds?.length ? localT.matrixThresholds : dbT.matrixThresholds) || dbT.matrixThresholds || localT.matrixThresholds,
-          formula: (localT.formula?.expression ? localT.formula : dbT.formula) || dbT.formula || localT.formula,
-          categories: (localT.categories?.length ? localT.categories : dbT.categories) || dbT.categories || localT.categories,
-          entities: (localT.entities?.length ? localT.entities : dbT.entities) || dbT.entities || localT.entities,
-          workflowSteps: (localT.workflowSteps?.length ? localT.workflowSteps : dbT.workflowSteps) || dbT.workflowSteps || localT.workflowSteps,
+          scales: (dbT.scales?.frequency?.length ? dbT.scales : localT.scales) || localT.scales,
+          matrixSize: dbT.matrixSize || localT.matrixSize || 4,
+          matrixThresholds: (dbT.matrixThresholds?.length ? dbT.matrixThresholds : localT.matrixThresholds) || localT.matrixThresholds,
+          formula: (dbT.formula?.expression ? dbT.formula : localT.formula) || localT.formula,
+          categories: (dbT.categories?.length ? dbT.categories : localT.categories) || localT.categories,
+          entities: (dbT.entities?.length ? dbT.entities : localT.entities) || localT.entities,
+          workflowSteps: (dbT.workflowSteps?.length ? dbT.workflowSteps : localT.workflowSteps) || localT.workflowSteps,
         });
       }
     }
