@@ -21,6 +21,8 @@ import {
   UserCheck,
   ToggleLeft,
   CheckCircle,
+  CheckCircle2,
+  Sliders,
   Activity,
   UserX,
   Database,
@@ -889,20 +891,24 @@ export default function ConfigModule({
 
   // --- Scales Edit ---
   const handleUpdateScaleLabel = (type: 'freq' | 'imp' | 'ctrl', index: number, field: 'label' | 'description', value: string) => {
-    const nextScales = { ...tenantConfig.scales };
+    const nextScales = {
+      frequency: tenantConfig.scales?.frequency || [],
+      impact: tenantConfig.scales?.impact || [],
+      control: tenantConfig.scales?.control || [],
+    };
     let list: ScaleItem[] = [];
 
     if (type === 'freq') {
       list = [...nextScales.frequency];
-      list[index] = { ...list[index], [field]: value };
+      if (list[index]) list[index] = { ...list[index], [field]: value };
       nextScales.frequency = list;
     } else if (type === 'imp') {
       list = [...nextScales.impact];
-      list[index] = { ...list[index], [field]: value };
+      if (list[index]) list[index] = { ...list[index], [field]: value };
       nextScales.impact = list;
     } else {
       list = [...nextScales.control];
-      list[index] = { ...list[index], [field]: value };
+      if (list[index]) list[index] = { ...list[index], [field]: value };
       nextScales.control = list;
     }
 
@@ -913,7 +919,11 @@ export default function ConfigModule({
   };
 
   const handleAddScaleItem = (type: 'freq' | 'imp' | 'ctrl') => {
-    const nextScales = { ...tenantConfig.scales };
+    const nextScales = {
+      frequency: tenantConfig.scales?.frequency || [],
+      impact: tenantConfig.scales?.impact || [],
+      control: tenantConfig.scales?.control || [],
+    };
     if (type === 'freq') {
       const len = nextScales.frequency.length;
       nextScales.frequency = [...nextScales.frequency, { value: len + 1, label: `Niveau ${len + 1}`, description: `Description du niveau ${len + 1}` }];
@@ -929,7 +939,11 @@ export default function ConfigModule({
   };
 
   const handleRemoveScaleItem = (type: 'freq' | 'imp' | 'ctrl', index: number) => {
-    const nextScales = { ...tenantConfig.scales };
+    const nextScales = {
+      frequency: tenantConfig.scales?.frequency || [],
+      impact: tenantConfig.scales?.impact || [],
+      control: tenantConfig.scales?.control || [],
+    };
     if (type === 'freq') {
       if (nextScales.frequency.length <= 2) return;
       nextScales.frequency = nextScales.frequency.filter((_, i) => i !== index).map((item, idx) => ({ ...item, value: idx + 1 }));
@@ -946,8 +960,11 @@ export default function ConfigModule({
 
   const handleValidateAndSaveConfig = () => {
     onUpdateTenantConfig({ ...tenantConfig });
-    onAddLog('Config Moteur', `Validation globale des Paramètres de Notation & Cotation (Matrice ${tenantConfig.matrixSize}x${tenantConfig.matrixSize}, ${tenantConfig.matrixThresholds.length} seuils, Formule ${tenantConfig.formula.name}).`);
-    setSaveSuccessMessage(`✅ Paramètres de Notation & Cotation validés et enregistrés avec succès dans la BDD Supabase ! (Matrice ${tenantConfig.matrixSize}×${tenantConfig.matrixSize})`);
+    const thresholdCount = (tenantConfig.matrixThresholds || []).length;
+    const formulaName = tenantConfig.formula?.name || 'Formule Standard';
+    const currentSize = tenantConfig.matrixSize || 4;
+    onAddLog('Config Moteur', `Validation globale des Paramètres de Notation & Cotation (Matrice ${currentSize}x${currentSize}, ${thresholdCount} seuils, Formule ${formulaName}).`);
+    setSaveSuccessMessage(`✅ Paramètres de Notation & Cotation validés et enregistrés avec succès dans la BDD Supabase ! (Matrice ${currentSize}×${currentSize})`);
     setTimeout(() => setSaveSuccessMessage(null), 6000);
   };
 
@@ -1065,7 +1082,8 @@ export default function ConfigModule({
   };
 
   const handleUpdateThresholdItem = (index: number, updatedItem: MatrixThreshold) => {
-    const newThresholds = [...tenantConfig.matrixThresholds];
+    const currentList = tenantConfig.matrixThresholds || [];
+    const newThresholds = [...currentList];
     newThresholds[index] = updatedItem;
     onUpdateTenantConfig({
       ...tenantConfig,
@@ -1095,8 +1113,9 @@ export default function ConfigModule({
   };
 
   const handleRemoveThresholdItem = (index: number) => {
-    if (tenantConfig.matrixThresholds.length <= 2) return;
-    const newThresholds = tenantConfig.matrixThresholds.filter((_, i) => i !== index);
+    const currentList = tenantConfig.matrixThresholds || [];
+    if (currentList.length <= 2) return;
+    const newThresholds = currentList.filter((_, i) => i !== index);
     onUpdateTenantConfig({
       ...tenantConfig,
       matrixThresholds: newThresholds
@@ -1105,9 +1124,10 @@ export default function ConfigModule({
   };
 
   const handleMoveThresholdItem = (index: number, direction: 'up' | 'down') => {
+    const currentList = tenantConfig.matrixThresholds || [];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= tenantConfig.matrixThresholds.length) return;
-    const newThresholds = [...tenantConfig.matrixThresholds];
+    if (targetIndex < 0 || targetIndex >= currentList.length) return;
+    const newThresholds = [...currentList];
     const temp = newThresholds[index];
     newThresholds[index] = newThresholds[targetIndex];
     newThresholds[targetIndex] = temp;
@@ -3098,7 +3118,7 @@ export default function ConfigModule({
 
               {/* Editing block layout */}
               <div className="space-y-3">
-                {activeScaleType === 'freq' && tenantConfig.scales.frequency.map((item, idx) => (
+                {activeScaleType === 'freq' && (tenantConfig.scales?.frequency || []).map((item, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
                       <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
@@ -3122,7 +3142,7 @@ export default function ConfigModule({
                       />
                     </div>
                     <div className="col-span-1 text-right">
-                      {tenantConfig.scales.frequency.length > 2 && (
+                      {(tenantConfig.scales?.frequency || []).length > 2 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveScaleItem('freq', idx)}
@@ -3136,7 +3156,7 @@ export default function ConfigModule({
                   </div>
                 ))}
 
-                {activeScaleType === 'imp' && tenantConfig.scales.impact.map((item, idx) => (
+                {activeScaleType === 'imp' && (tenantConfig.scales?.impact || []).map((item, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
                       <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
@@ -3160,7 +3180,7 @@ export default function ConfigModule({
                       />
                     </div>
                     <div className="col-span-1 text-right">
-                      {tenantConfig.scales.impact.length > 2 && (
+                      {(tenantConfig.scales?.impact || []).length > 2 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveScaleItem('imp', idx)}
@@ -3174,7 +3194,7 @@ export default function ConfigModule({
                   </div>
                 ))}
 
-                {activeScaleType === 'ctrl' && tenantConfig.scales.control.map((item, idx) => (
+                {activeScaleType === 'ctrl' && (tenantConfig.scales?.control || []).map((item, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 hover:bg-white rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center shadow-2xs transition">
                     <div className="col-span-1 text-center">
                       <span className="font-bold text-sm font-mono text-indigo-600 bg-white px-2.5 py-1 rounded-full border border-slate-250 shadow-inner">
@@ -3198,7 +3218,7 @@ export default function ConfigModule({
                       />
                     </div>
                     <div className="col-span-1 text-right">
-                      {tenantConfig.scales.control.length > 2 && (
+                      {(tenantConfig.scales?.control || []).length > 2 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveScaleItem('ctrl', idx)}
@@ -3228,7 +3248,7 @@ export default function ConfigModule({
                 <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">1. Choix du Mode de Cotation de la Sévérité</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between ${
-                    (tenantConfig.formula.ratingMode || 'FREQ_IMP') === 'FREQ_IMP' 
+                    (tenantConfig.formula?.ratingMode || 'FREQ_IMP') === 'FREQ_IMP' 
                       ? 'bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold' 
                       : 'bg-white border-slate-200 text-slate-700'
                   }`}>
@@ -3239,7 +3259,7 @@ export default function ConfigModule({
                     <input 
                       type="radio" 
                       name="ratingMode"
-                      checked={(tenantConfig.formula.ratingMode || 'FREQ_IMP') === 'FREQ_IMP'}
+                      checked={(tenantConfig.formula?.ratingMode || 'FREQ_IMP') === 'FREQ_IMP'}
                       onChange={() => {
                         onUpdateTenantConfig({
                           ...tenantConfig,
@@ -3255,7 +3275,7 @@ export default function ConfigModule({
                   </label>
 
                   <label className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between ${
-                    tenantConfig.formula.ratingMode === 'PROB_IMP' 
+                    (tenantConfig.formula?.ratingMode || 'FREQ_IMP') === 'PROB_IMP' 
                       ? 'bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold' 
                       : 'bg-white border-slate-200 text-slate-700'
                   }`}>
@@ -3266,7 +3286,7 @@ export default function ConfigModule({
                     <input 
                       type="radio" 
                       name="ratingMode"
-                      checked={tenantConfig.formula.ratingMode === 'PROB_IMP'}
+                      checked={(tenantConfig.formula?.ratingMode || 'FREQ_IMP') === 'PROB_IMP'}
                       onChange={() => {
                         onUpdateTenantConfig({
                           ...tenantConfig,
@@ -3289,7 +3309,7 @@ export default function ConfigModule({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* IFACI Multiplicatif */}
                   <div className={`p-4 rounded-xl border space-y-2 transition ${
-                    (tenantConfig.formula.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'
+                    (tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'
                       ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
                       : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
                   }`}>
@@ -3298,7 +3318,7 @@ export default function ConfigModule({
                       <input 
                         type="radio" 
                         name="formula-select" 
-                        checked={(tenantConfig.formula.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'}
+                        checked={(tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'IFACI_MULTIPLICATIVE'}
                         onChange={() => {
                           onUpdateTenantConfig({
                             ...tenantConfig,
@@ -3327,7 +3347,7 @@ export default function ConfigModule({
 
                   {/* Soustractif AeroTech */}
                   <div className={`p-4 rounded-xl border space-y-2 transition ${
-                    tenantConfig.formula.formulaType === 'AERO_SUBTRACTIVE'
+                    (tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'AERO_SUBTRACTIVE'
                       ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
                       : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
                   }`}>
@@ -3336,7 +3356,7 @@ export default function ConfigModule({
                       <input 
                         type="radio" 
                         name="formula-select" 
-                        checked={tenantConfig.formula.formulaType === 'AERO_SUBTRACTIVE'}
+                        checked={(tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'AERO_SUBTRACTIVE'}
                         onChange={() => {
                           onUpdateTenantConfig({
                             ...tenantConfig,
@@ -3365,7 +3385,7 @@ export default function ConfigModule({
 
                   {/* Divisionnaire */}
                   <div className={`p-4 rounded-xl border space-y-2 transition ${
-                    tenantConfig.formula.formulaType === 'DIVISIONAL'
+                    (tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'DIVISIONAL'
                       ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
                       : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
                   }`}>
@@ -3374,7 +3394,7 @@ export default function ConfigModule({
                       <input 
                         type="radio" 
                         name="formula-select" 
-                        checked={tenantConfig.formula.formulaType === 'DIVISIONAL'}
+                        checked={(tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'DIVISIONAL'}
                         onChange={() => {
                           onUpdateTenantConfig({
                             ...tenantConfig,
@@ -3403,7 +3423,7 @@ export default function ConfigModule({
 
                   {/* Direct Brut */}
                   <div className={`p-4 rounded-xl border space-y-2 transition ${
-                    tenantConfig.formula.formulaType === 'DIRECT_BRUT'
+                    (tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'DIRECT_BRUT'
                       ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-300'
                       : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
                   }`}>
@@ -3412,7 +3432,7 @@ export default function ConfigModule({
                       <input 
                         type="radio" 
                         name="formula-select" 
-                        checked={tenantConfig.formula.formulaType === 'DIRECT_BRUT'}
+                        checked={(tenantConfig.formula?.formulaType || 'IFACI_MULTIPLICATIVE') === 'DIRECT_BRUT'}
                         onChange={() => {
                           onUpdateTenantConfig({
                             ...tenantConfig,
@@ -3553,7 +3573,7 @@ export default function ConfigModule({
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                    Tableau des Seuils de Criticité Personnalisables ({tenantConfig.matrixThresholds.length} Niveaux Définis)
+                    Tableau des Seuils de Criticité Personnalisables ({(tenantConfig.matrixThresholds || []).length} Niveaux Définis)
                   </h4>
 
                   <button
@@ -3581,7 +3601,7 @@ export default function ConfigModule({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {tenantConfig.matrixThresholds.map((t, idx) => (
+                        {(tenantConfig.matrixThresholds || []).map((t, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/80 transition">
                             {/* Niveau */}
                             <td className="p-3 text-center">
@@ -3679,7 +3699,7 @@ export default function ConfigModule({
                                 <button
                                   type="button"
                                   onClick={() => handleMoveThresholdItem(idx, 'down')}
-                                  disabled={idx === tenantConfig.matrixThresholds.length - 1}
+                                  disabled={idx === (tenantConfig.matrixThresholds || []).length - 1}
                                   className="p-1 text-slate-400 hover:text-indigo-600 disabled:opacity-30 cursor-pointer"
                                   title="Descendre"
                                 >
@@ -3688,7 +3708,7 @@ export default function ConfigModule({
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveThresholdItem(idx)}
-                                  disabled={tenantConfig.matrixThresholds.length <= 2}
+                                  disabled={(tenantConfig.matrixThresholds || []).length <= 2}
                                   className="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30 cursor-pointer"
                                   title="Supprimer ce niveau"
                                 >
@@ -3709,7 +3729,7 @@ export default function ConfigModule({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-600" />
-                    Aperçu Dynamique de la Matrice {tenantConfig.matrixSize}×{tenantConfig.matrixSize} avec la Graduation Active
+                    Aperçu Dynamique de la Matrice {tenantConfig.matrixSize || 4}×{tenantConfig.matrixSize || 4} avec la Graduation Active
                   </h4>
                   <span className="text-[10px] text-slate-400 italic">
                     Chaque case (F × I) applique la couleur définie par les seuils
@@ -3720,21 +3740,22 @@ export default function ConfigModule({
                   {/* Grid render */}
                   <div className="inline-block border border-slate-300 rounded-lg p-3 bg-white shadow-2xs">
                     <div className="text-center font-extrabold text-slate-700 text-[11px] mb-2 uppercase">
-                      Axe Y : Fréquence (1 à {tenantConfig.matrixSize}) × Axe X : Impact (1 à {tenantConfig.matrixSize})
+                      Axe Y : Fréquence (1 à {tenantConfig.matrixSize || 4}) × Axe X : Impact (1 à {tenantConfig.matrixSize || 4})
                     </div>
 
                     <div
                       className="grid gap-1.5"
                       style={{
-                        gridTemplateColumns: `repeat(${tenantConfig.matrixSize}, minmax(48px, 1fr))`
+                        gridTemplateColumns: `repeat(${tenantConfig.matrixSize || 4}, minmax(48px, 1fr))`
                       }}
                     >
-                      {Array.from({ length: tenantConfig.matrixSize }, (_, rowIdx) => {
-                        const f = tenantConfig.matrixSize - rowIdx; // Y axis top to bottom
-                        return Array.from({ length: tenantConfig.matrixSize }, (_, colIdx) => {
+                      {Array.from({ length: tenantConfig.matrixSize || 4 }, (_, rowIdx) => {
+                        const matrixDim = tenantConfig.matrixSize || 4;
+                        const f = matrixDim - rowIdx; // Y axis top to bottom
+                        return Array.from({ length: matrixDim }, (_, colIdx) => {
                           const i = colIdx + 1; // X axis left to right
                           const product = f * i;
-                          const thresh = getCriticalityFromThresholds(product, tenantConfig.matrixThresholds);
+                          const thresh = getCriticalityFromThresholds(product, tenantConfig.matrixThresholds || []);
 
                           return (
                             <div
@@ -3755,7 +3776,7 @@ export default function ConfigModule({
 
                   {/* Legend bar */}
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                    {tenantConfig.matrixThresholds.map((t, idx) => (
+                    {(tenantConfig.matrixThresholds || []).map((t, idx) => (
                       <div key={idx} className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 ${t.color}`}>
                         <span className="w-2 h-2 rounded-full bg-current opacity-80"></span>
                         <span>{t.label}</span>
