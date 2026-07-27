@@ -22,7 +22,9 @@ import {
   Check,
   FileText,
   User as UserIcon,
-  ListFilter
+  ListFilter,
+  PieChart,
+  BarChart3
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
 import { getCriticalityFromThresholds } from '../utils/riskUtils';
@@ -269,6 +271,212 @@ export default function DashboardModule({
     return [...filteredRisks].sort((a, b) => b.scoreResiduel - a.scoreResiduel).slice(0, 5);
   }, [filteredRisks]);
 
+  // 1. Entity Breakdown (Risques par Unité - Pie / Donut Chart Data)
+  const entityBreakdown = useMemo(() => {
+    if (totalRisks === 0) return [];
+    const map = new Map<string, { id: string; name: string; count: number }>();
+
+    filteredRisks.forEach(r => {
+      const entId = r.entityId || 'unassigned';
+      const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté / Unité inconnue' : entId);
+
+      if (!map.has(entId)) {
+        map.set(entId, { id: entId, name: entName, count: 0 });
+      }
+      map.get(entId)!.count += 1;
+    });
+
+    const palette = [
+      '#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+      '#EC4899', '#06B6D4', '#14B8A6', '#F97316', '#3B82F6'
+    ];
+
+    const items = Array.from(map.values()).sort((a, b) => b.count - a.count);
+    let accumulatedAngle = 0;
+
+    return items.map((item, idx) => {
+      const percentage = Number(((item.count / totalRisks) * 100).toFixed(1));
+      const angle = (item.count / totalRisks) * 360;
+      const startAngle = accumulatedAngle;
+      accumulatedAngle += angle;
+
+      return {
+        ...item,
+        percentage,
+        color: palette[idx % palette.length],
+        startAngle,
+        angle
+      };
+    });
+  }, [filteredRisks, tenantConfig.entities, totalRisks]);
+
+  // 2. Strategic Decision Chart 1: Attenuation & Control Efficiency (Score Brut vs Score Résiduel par Catégorie)
+  const categoryControlImpact = useMemo(() => {
+    return (tenantConfig.categories || []).map(cat => {
+      const catRisks = filteredRisks.filter(r => 
+        r.categoryId === cat.id || 
+        r.categoryId === cat.name || 
+        (r.categoryId && cat.name && r.categoryId.toLowerCase() === cat.name.toLowerCase())
+      );
+      const count = catRisks.length;
+      const avgBrut = count > 0 ? Number((catRisks.reduce((sum, r) => sum + r.scoreBrut, 0) / count).toFixed(1)) : 0;
+      const avgResiduel = count > 0 ? Number((catRisks.reduce((sum, r) => sum + r.scoreResiduel, 0) / count).toFixed(1)) : 0;
+      const reductionPercent = avgBrut > 0 ? Math.round(((avgBrut - avgResiduel) / avgBrut) * 100) : 0;
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        color: cat.color || '#6366F1',
+        count,
+        avgBrut,
+        avgResiduel,
+        reductionPercent
+      };
+    }).filter(c => c.count > 0);
+  }, [filteredRisks, tenantConfig.categories]);
+
+  // 3. Strategic Decision Chart 2: Remediation & Action Plan Coverage by Criticality Level
+  const criticalityActionCoverage = useMemo(() => {
+    return tenantConfig.matrixThresholds.map(t => {
+      const levelRisks = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label);
+      const totalCount = levelRisks.length;
+      
+      const withActionsCount = levelRisks.filter(r => actions.some(a => a.riskId === r.id)).length;
+      const coveredPercent = totalCount > 0 ? Math.round((withActionsCount / totalCount) * 100) : 0;
+      
+      const levelActions = actions.filter(a => levelRisks.some(r => r.id === a.riskId));
+      const completedActionsCount = levelActions.filter(a => a.status === 'Réalisé').length;
+      const actionProgressAvg = levelActions.length > 0 
+        ? Math.round(levelActions.reduce((acc, a) => acc + (a.progress || 0), 0) / levelActions.length)
+        : 0;
+
+      return {
+        label: t.label,
+        color: t.color,
+        textColor: t.textColor,
+        totalCount,
+        withActionsCount,
+        orphanCount: totalCount - withActionsCount,
+        coveredPercent,
+        totalActionsCount: levelActions.length,
+        completedActionsCount,
+        actionProgressAvg
+      };
+    });
+  }, [filteredRisks, tenantConfig.matrixThresholds, actions]);
+
+  // 4. Strategic Chart: Unit vs Criticality Thresholds (X-axis: Units, Y-axis: Criticality Thresholds)
+  const unitCriticalityBreakdown = useMemo(() => {
+    const thresholds = tenantConfig.matrixThresholds || [];
+
+    const entityMap = new Map<string, {
+      id: string;
+      name: string;
+      total: number;
+      maxScore: number;
+      avgScore: number;
+      levelCounts: { label: string; color: string; textColor: string; count: number }[];
+    }>();
+
+    filteredRisks.forEach(r => {
+      const entId = r.entityId || 'unassigned';
+      const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté' : entId);
+
+      if (!entityMap.has(entId)) {
+        entityMap.set(entId, {
+          id: entId,
+          name: entName,
+          total: 0,
+          maxScore: 0,
+          avgScore: 0,
+          levelCounts: thresholds.map(t => ({
+            label: t.label,
+            color: t.color,
+            textColor: t.textColor,
+            count: 0
+          }))
+        });
+      }
+
+      const item = entityMap.get(entId)!;
+      item.total += 1;
+      item.maxScore = Math.max(item.maxScore, r.scoreResiduel);
+
+      const crit = getCriticality(r.scoreResiduel);
+      const levelObj = item.levelCounts.find(l => l.label === crit.label);
+      if (levelObj) {
+        levelObj.count += 1;
+      }
+    });
+
+    return Array.from(entityMap.values()).map(item => {
+      const entRisks = filteredRisks.filter(r => (r.entityId || 'unassigned') === item.id);
+      const sum = entRisks.reduce((acc, r) => acc + r.scoreResiduel, 0);
+      item.avgScore = item.total > 0 ? Number((sum / item.total).toFixed(1)) : 0;
+      return item;
+    }).sort((a, b) => b.total - a.total);
+  }, [filteredRisks, tenantConfig.entities, tenantConfig.matrixThresholds]);
+
+  // 5. Strategic Chart: Unit vs Risk Categories Breakdown (X-axis: Units, Sub-bars / Stacked: Categories with %, counts, and legend)
+  const unitCategoryBreakdown = useMemo(() => {
+    const categories = tenantConfig.categories || [];
+    const catPalette = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1', '#F97316'];
+
+    const catWithColor = categories.map((cat, idx) => ({
+      ...cat,
+      color: cat.color || catPalette[idx % catPalette.length]
+    }));
+
+    const entityMap = new Map<string, {
+      id: string;
+      name: string;
+      total: number;
+      catCounts: { id: string; name: string; color: string; count: number; percentage: number }[];
+    }>();
+
+    filteredRisks.forEach(r => {
+      const entId = r.entityId || 'unassigned';
+      const entObj = tenantConfig.entities.find(e => e.id === entId);
+      const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté' : entId);
+
+      if (!entityMap.has(entId)) {
+        entityMap.set(entId, {
+          id: entId,
+          name: entName,
+          total: 0,
+          catCounts: catWithColor.map(c => ({
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            count: 0,
+            percentage: 0
+          }))
+        });
+      }
+
+      const item = entityMap.get(entId)!;
+      item.total += 1;
+
+      const catObj = item.catCounts.find(c => 
+        c.id === r.categoryId || 
+        c.name === r.categoryId || 
+        (r.categoryId && c.name && r.categoryId.toLowerCase() === c.name.toLowerCase())
+      );
+      if (catObj) {
+        catObj.count += 1;
+      }
+    });
+
+    return Array.from(entityMap.values()).map(item => {
+      item.catCounts.forEach(c => {
+        c.percentage = item.total > 0 ? Math.round((c.count / item.total) * 100) : 0;
+      });
+      return item;
+    }).sort((a, b) => b.total - a.total);
+  }, [filteredRisks, tenantConfig.entities, tenantConfig.categories]);
+
   // Matrix axes values
   const freqValues = Array.from({ length: size }, (_, i) => size - i); // e.g. 4, 3, 2, 1
   const impactValues = Array.from({ length: size }, (_, i) => i + 1); // e.g. 1, 2, 3, 4
@@ -335,99 +543,190 @@ export default function DashboardModule({
     return getRisksInCell(selectedCell.y, selectedCell.x, matrixType);
   }, [selectedCell, filteredRisks, matrixType]);
 
-  // Dynamic GRC Markdown synthesis based on selected filters
+  // Dynamic GRC Markdown synthesis based on selected filters, chapters, sections and paragraphs
   const handleExportMarkdown = () => {
     const dateStr = new Date().toLocaleDateString('fr-FR');
+    const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    
     const entityName = selectedEntityId === 'all' 
-      ? 'Tous les périmètres (Global)' 
+      ? 'Tous les périmètres (Périmètre Global Groupe)' 
       : (tenantConfig.entities.find(e => e.id === selectedEntityId)?.name || 'Inconnu');
 
     const catName = selectedCategoryId === 'all'
-      ? 'Toutes les catégories'
+      ? 'Toutes les catégories thématiques'
       : (tenantConfig.categories.find(c => c.id === selectedCategoryId)?.name || 'Inconnu');
 
-    let mdContent = `# RAPPORT DE SYNTHÈSE DÉCISIONNELLE GRC
+    const modeLabel = selectedOrgMode === 'hierarchique' 
+      ? 'Hiérarchique strict (ligne directe)' 
+      : 'Matriciel (incluant les rattachements secondaires et double-lignes)';
+
+    const periodLabel = selectedPeriodicity === 'all' 
+      ? `Exercice global ${selectedYear}`
+      : selectedPeriodicity === 'month'
+      ? `Exercice ${selectedYear} — Mois ${selectedMonth}`
+      : selectedPeriodicity === 'trimester'
+      ? `Exercice ${selectedYear} — Trimestre ${selectedTrimester}`
+      : `Exercice ${selectedYear} — Intervalle mois ${selectedStartMonth} à ${selectedEndMonth}`;
+
+    let mdContent = `# RAPPORT DE SYNTHÈSE STRATÉGIQUE ET DÉCISIONNELLE GRC
 ---
-**Destinataires :** Direction Générale, Comité des Risques, Décideurs Stratégiques
-**Organisation :** ${tenantConfig.companyName}
-**Périmètre d'Analyse :** ${entityName} (${selectedOrgMode === 'hierarchique' ? 'Mode Hiérarchique strict' : 'Mode Matriciel transverse'})
-**Filtre Thématique :** ${catName}
-**Exercice de Référence :** Exercice ${selectedYear} (${selectedPeriodicity === 'all' ? 'Annuel' : selectedPeriodicity})
-**Date d'Émission :** ${dateStr}
-
----
-
-## 1. Résumé Exécutif & Tableau de Bord Général
-
-Le présent rapport synthétise la cartographie globale des risques consolidée en temps réel. Les données reflètent les dispositifs actifs de maîtrise ainsi que l'évolution des initiatives de remédiation en cours.
-
-### Indicateurs de Performance GRC Clés (KPIs)
-* **Volume Global de Risques Actifs :** **${totalRisks}** risques identifiés et suivis (vs **${totalRisksPrev}** lors du cycle précédent).
-* **Indice Global Net Moyen (Gravité Résiduelle) :** **${avgResidualScore}** / 100 (vs **${avgResidualScorePrev}** précédemment).
-  * *Note de lecture :* L'indice net représente le score d'exposition réelle après application des dispositifs de maîtrise.
-* **Taux d'Avancement des Actions de Remédiation :** **${actionCompletionRate}%** de clôture des actions programmées (vs **${actionCompletionRatePrev}%** au cycle précédent).
-* **Alertes de Criticité Majeure :** **${criticalRisksCount}** risques en zone d'alerte rouge exigeant une attention immédiate de la Direction.
+**Société / Organisation :** ${tenantConfig.companyName}
+**Destinataires :** Direction Générale, Comité des Risques et Décideurs Stratégiques
+**Date d'émission :** ${dateStr} à ${timeStr}
+**Document Référence :** RAP-GRC-${selectedYear}-${Date.now().toString().slice(-4)}
 
 ---
 
-## 2. Analyse Comparative & Tendances Temporelles
+## CHAPITRE 1 : PÉRIMÈTRE ET CONTEXTE DE L'ÉVALUATION
 
-L'évaluation comparative automatisée entre le cycle actuel et le cycle précédent révèle les dynamiques suivantes :
-* **Exposition globale :** ${
+### Section 1.1 : Filtres d'Analyse Actifs
+Le présent rapport est établi à partir des données réelles de la cartographie des risques consolidées en BDD selon la configuration de filtres suivante :
+* **Unité / Périmètre Organisationnel :** **${entityName}**
+* **Mode de Consolidation :** **${modeLabel}**
+* **Catégorie Thématique Filtre :** **${catName}**
+* **Exercice et Période Temporelle :** **${periodLabel}**
+
+### Section 1.2 : Cadre Méthodologique et Moteur de Cotation
+Les évaluations de risques reposent sur la méthodologie standard IFACI / COSO GRC. La gravité brute d'un risque est déterminée par le produit de sa Fréquence (*F*) par son Impact (*I*). La gravité résiduelle (score net) prend en compte le Coefficient d'Efficacité de Maîtrise (*M*) selon la formule configurée : \`${tenantConfig.formula?.expression || 'ScoreBrut * CoeffMaîtrise'}\`.
+
+---
+
+## CHAPITRE 2 : SYNTHÈSE EXÉCUTIVE ET INDICATEURS MAJEURS (KPIS)
+
+### Section 2.1 : Tableau de Bord des Métriques Clés
+Les métriques consolidees du périmètre actif s'établissent comme suit :
+
+1. **Volume Global de Risques Actifs :** **${totalRisks}** risque(s) répertorié(s) (vs **${totalRisksPrev}** sur la période comparée précédente).
+2. **Indice d'Exposition Nette Moyenne (Gravité Résiduelle) :** **${avgResidualScore}** / 100 (vs **${avgResidualScorePrev}** précédemment).
+3. **Taux Globale d'Avancement des Plans de Remédiation :** **${actionCompletionRate}%** d'exécution (vs **${actionCompletionRatePrev}%** précédemment).
+4. **Volume d'Alertes Critiques Rouges :** **${criticalRisksCount}** risque(s) au-dessus des seuils de tolérance exigibles.
+
+### Section 2.2 : Analyse Paragraphe des Tendances Temporelles
+* **Évolution de la Gravité Résiduelle :** ${
       avgResidualScore < avgResidualScorePrev 
-        ? `Tendance favorable. L'indice net moyen a diminué de **${Number((prevParams.prevYear !== 'all' ? (avgResidualScorePrev - avgResidualScore) : 0).toFixed(1))}** points grâce à l'efficacité accrue des barrières de contrôle.`
+        ? `Tendance favorable. L'indice net moyen a baissé de **${Number((avgResidualScorePrev - avgResidualScore).toFixed(1))}** points grâce au renforcement des contrôles.`
         : avgResidualScore === avgResidualScorePrev
-        ? `Exposition stable. L'indice net est inchangé.`
-        : `Vigilance requise. Augmentation de l'indice de risque de **${Number((avgResidualScore - avgResidualScorePrev).toFixed(1))}** points, indiquant de nouvelles menaces ou une dégradation des contrôles.`
+        ? `Stabilisation constatée. L'exposition résiduelle nette est identique entre les deux exercices.`
+        : `Augmentation de l'exposition globale de **${Number((avgResidualScore - avgResidualScorePrev).toFixed(1))}** points. Des menaces émergentes nécessitent des ajustements de contrôle.`
     }
-* **Avancement des plans d'atténuation :** ${
+* **Exécution des Initiatives de Remédiation :** ${
       actionCompletionRate >= actionCompletionRatePrev
-        ? `Accélération du traitement des risques avec un gain de **${actionCompletionRate - actionCompletionRatePrev}%** dans l'exécution du plan GRC.`
-        : `Ralentissement constaté dans l'exécution du plan d'action (baisse de **${actionCompletionRatePrev - actionCompletionRate}%**). Des goulots d'étranglement opérationnels doivent être levés.`
+        ? `Progression satisfaisante avec une hausse de **${actionCompletionRate - actionCompletionRatePrev}%** du taux de réalisation.`
+        : `Ralentissement constaté (-**${actionCompletionRatePrev - actionCompletionRate}%**). Les managers doivent être relancés sur les plans en retard.`
     }
 
 ---
 
-## 3. Répartition Stratégique des Risques Résiduels
+## CHAPITRE 3 : VENTILATION ET DISTRIBUTION DES RISQUES PAR UNITÉ / ENTITÉ
 
-### 3.1 Décomposition par Seuil de Criticité
-${criticalityCounts.map(c => `* **${c.label} :** ${c.count} risque(s) (${c.percentage}%)`).join('\n')}
+### Section 3.1 : Répartition des Risques par Unité Organisationnelle (Effectif & Pourcentage)
 
-### 3.2 Décomposition par Catégorie Thématique
-${categoryCounts.map(c => `* **${c.label} :** ${c.count} risque(s) (${c.percentage}%)`).join('\n')}
+| Unité / Entité | Nombre de Risques | Pourcentage du Volume Global |
+| :--- | :---: | :---: |
+${
+  entityBreakdown.length === 0 
+    ? '| Aucune donnée | 0 | 0% |'
+    : entityBreakdown.map(e => `| **${e.name}** | **${e.count}** | **${e.percentage}%** |`).join('\n')
+}
+
+### Section 3.2 : Synthèse Paragraphe sur la Concentration Opérationnelle
+${
+  entityBreakdown.length > 0 
+    ? `L'unité principale **${entityBreakdown[0].name}** concentre **${entityBreakdown[0].count}** risques, soit **${entityBreakdown[0].percentage}%** de l'ensemble du périmètre filtré. La Direction doit s'assurer que les ressources d'audit et de contrôle sont proportionnellement allouées à cette entité.`
+    : `Aucun risque n'est répertorié dans cette sélection.`
+}
 
 ---
 
-## 4. Focus sur les Risques Majeurs (Top Alerte Rouge)
+## CHAPITRE 4 : PROFIL DE CRITICITÉ ET SEUILS PAR UNITÉ (AXE X: UNITÉS / AXE Y: SEUILS DE CRITICITÉ)
 
-Les risques suivants présentent les scores résiduels nets les plus élevés de la période et concentrent l'attention des risk managers :
+### Section 4.1 : Inscription des Effectifs de Risques par Seuil et par Unité Organisationnelle
+
+| Unité / Entité (Axe X) | Total Risques | Score Net Moyen | Score Max | ${tenantConfig.matrixThresholds.map(t => t.label).join(' | ')} |
+| :--- | :---: | :---: | :---: | ${tenantConfig.matrixThresholds.map(() => ':---:').join(' | ')} |
+${
+  unitCriticalityBreakdown.length === 0
+    ? '| Aucune unité | 0 | 0 | 0 | ' + tenantConfig.matrixThresholds.map(() => '0').join(' | ') + ' |'
+    : unitCriticalityBreakdown.map(u => {
+        const levelCols = u.levelCounts.map(l => `**${l.count}**`).join(' | ');
+        return `| **${u.name}** | **${u.total}** | ${u.avgScore} | ${u.maxScore} | ${levelCols} |`;
+      }).join('\n')
+}
+
+### Section 4.2 : Paragraphe d'Analyse de la Sensibilité par Unité
+L'analyse croisée (Unités sur l'Axe X / Graduation de Criticité sur l'Axe Y) met en évidence la répartition effective des niveaux d'exposition. Chaque tranche de criticité est inscrite de manière explicite pour permettre à la Direction Générale d'identifier les poches de vulnérabilités majeures et d'allouer les ressources d'atténuation aux unités les plus exposées.
+
+---
+
+## CHAPITRE 5 : ANALYSE STRATÉGIQUE DE L'EFFICACITÉ DES CONTRÔLES PAR CATÉGORIE
+
+### Section 5.1 : Répartition par Seuil de Criticité Global
+${criticalityCounts.map(c => `* **${c.label} :** ${c.count} risque(s) (**${c.percentage}%**)`).join('\n')}
+
+### Section 5.2 : Évaluation de l'Efficacité des Contrôles par Catégorie (Atténuation Brut vs Résiduel)
+
+| Catégorie Thématique | Vol. Risques | Score Brut Moyen | Score Résiduel Moyen | Taux de Réduction |
+| :--- | :---: | :---: | :---: | :---: |
+${
+  categoryControlImpact.length === 0 
+    ? '| Aucune catégorie | 0 | 0 | 0 | 0% |'
+    : categoryControlImpact.map(c => `| **${c.name}** | ${c.count} | ${c.avgBrut} | **${c.avgResiduel}** | **-${c.reductionPercent}%** |`).join('\n')
+}
+
+---
+
+## CHAPITRE 6 : COUVERTURE DES PLANS D'ACTION ET TRAITEMENT DES RISQUES ORPHELINS
+
+### Section 6.1 : Couverture des Risques par Niveau de Severity et Plans d'Action
+
+| Niveau de Criticité | Volume Risques | Risques Couverts (≥1 action) | Risques Sans Action (Orphelins) | Taux de Couverture |
+| :--- | :---: | :---: | :---: | :---: |
+${
+  criticalityActionCoverage.map(c => `| **${c.label}** | ${c.totalCount} | ${c.withActionsCount} | **${c.orphanCount}** | **${c.coveredPercent}%** |`).join('\n')
+}
+
+### Section 6.2 : Paragraphe d'Analyse des Risques Sans Plan de Remédiation
+Les risques orphelins (ne bénéficiant d'aucune action de remédiation enregistrée) constituent un facteur d'insécurité prioritaire. Une relance systématique est programmée auprès des responsables d'entités pour garantir l'adjonction d'un plan d'action d'ici la prochaine échéance.
+
+---
+
+## CHAPITRE 7 : DOSSIERS PRIORITAIRES (TOP 5 DES RISQUES MAJEURS)
+
+Les fiches ci-dessous récapitulent les 5 risques dont le score résiduel net est le plus préoccupant :
 
 ${
   topRisks.length === 0 
     ? "Aucun risque majeur répertorié dans ce périmètre." 
     : topRisks.map((r, index) => {
         const crit = getCriticality(r.scoreResiduel);
-        return `### 4.${index + 1}. [${r.id}] ${r.title}
+        const entObj = tenantConfig.entities.find(e => e.id === r.entityId);
+        const entName = entObj ? entObj.name : r.entityId || 'Non spécifiée';
+        const riskActions = actions.filter(a => a.riskId === r.id);
+
+        return `### Section 7.${index + 1} : [${r.id}] ${r.title}
+* **Unité Rattachée :** ${entName}
 * **Catégorie :** ${resolveCategoryName(r.categoryId)}
-* **Gravité Résiduelle (Net) :** **${r.scoreResiduel}** (${crit.label}) | **Gravité brute :** ${r.scoreBrut}
-* **Formule de Cotation :** Fréquence [${r.frequencyValue}] x Impact [${r.impactValue}] x Maîtrise [${r.controlValue}]
-* **Propriétaire / Initiateur :** ${r.createdBy}
-* **Description :** ${r.description}
-* **Plans d'action associés :** ${actions.filter(a => a.riskId === r.id).length} actions définies.
+* **Score Brut :** ${r.scoreBrut} | **Maîtrise :** x${r.controlValue} | **Score Résiduel Net :** **${r.scoreResiduel}** (${crit.label})
+* **Description Détaillée :** ${r.description || 'Non renseignée.'}
+* **Causes Origines :** ${r.causes || 'Non renseignées.'}
+* **Conséquences Potentielles :** ${r.consequences || 'Non renseignées.'}
+* **Plans de Remédiation Rattachés (${riskActions.length}) :**
+${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' : riskActions.map(a => `  * **[${a.status}]** ${a.title} (Resp: ${a.ownerName}, Avancement: ${a.progress}%)`).join('\n')}
 `;
       }).join('\n')
 }
 
 ---
 
-## 5. Recommandations de la Direction GRC & Prochaines Étapes
+## CHAPITRE 8 : RECOMMANDATIONS STRATÉGIQUES ET PLAN D'ACTION DIRECTION
 
-1. **Focus sur la Maîtrise des Risques Majeurs :** Allouer prioritairement les ressources budgétaires et humaines sur les risques dont l'indice résiduel dépasse le seuil critique (Score > 32).
-2. **Dynamisation des Plans de Remédiation :** Assurer des revues bimensuelles sur les actions en statut "En cours" ou "À planifier" pour maintenir le taux de remédiation au-dessus de 80%.
-3. **Audits de Maîtrise :** Diligenter des missions d'audit ciblées pour valider l'efficacité réelle des barrières de contrôle (coefficient de maîtrise) déclarées par les opérationnels.
+### Section 8.1 : Recommandations Immédiates pour la Direction
+1. **Traitement Prioritaire des Risques Orphelins Critiques :** Exiger le raccordement immédiat d'un plan de remédiation pour tout risque de criticité Élevée/Critique ne disposant pas d'action attribuée.
+2. **Revue des Coefficients de Maîtrise :** Diligenter un contrôle d'audit sur les entités affichant une forte réduction théorique pour valider la réalité opérationnelle des barrières de contrôle.
+3. **Maintien du Cadence de Clôture :** Fixer un objectif de réalisation de minimum 85% d'avancement sur les plans d'actions majeurs d'ici la prochaine revue.
 
 ---
-*Rapport généré automatiquement par Sogesti GRC. Confidentialité Niveau 3 - Réservé aux Décideurs.*
+*Rapport d'évaluation décisionnelle exporté depuis Sogesti GRC. Document confidentiel réservé à la Direction.*
 `;
 
     // Trigger file download
@@ -435,7 +734,7 @@ ${
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `GRC-Synthese-Decisionnelle-${entityName.replace(/\s+/g, '-')}-${dateStr}.md`);
+    link.setAttribute('download', `GRC-Rapport-Decisionnel-${entityName.replace(/[^a-zA-Z0-9]/g, '_')}-${dateStr}.md`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -942,6 +1241,732 @@ ${
             <span>Sélectionnez un risque pour lancer l'audit de détails multi-niveau.</span>
           </div>
         </div>
+      </div>
+
+      {/* Strategic Decision Charts Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+        
+        {/* Chart 1: Risques par Unité (Pie/Donut + Histogramme en Barres) */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-indigo-600" />
+                Risques par Unité (Histogramme & Donut)
+              </h3>
+              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                {entityBreakdown.length} Unité(s)
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400">
+              Répartition en nombre et pourcentage de l'exposition par entité organisationnelle.
+            </p>
+          </div>
+
+          {entityBreakdown.length === 0 || totalRisks === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucun risque répertorié dans cette sélection.
+            </div>
+          ) : (
+            <div className="space-y-4 my-1">
+              {/* Dual Presentation: Donut SVG Chart + Vertical Bar Chart spanning full width */}
+              <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-50/80 p-4 rounded-xl border border-slate-150">
+                
+                {/* SVG Donut Chart (Diagramme en Cercle) */}
+                <div className="relative w-36 h-36 shrink-0 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 160 160">
+                    <circle
+                      cx="80"
+                      cy="80"
+                      r="55"
+                      fill="none"
+                      stroke="#E2E8F0"
+                      strokeWidth="22"
+                    />
+                    {(() => {
+                      const circumference = 2 * Math.PI * 55;
+                      let accumulated = 0;
+                      return entityBreakdown.map((item) => {
+                        const strokeDasharray = `${(item.percentage / 100) * circumference} ${circumference}`;
+                        const strokeDashoffset = -((accumulated / 100) * circumference);
+                        accumulated += item.percentage;
+                        return (
+                          <circle
+                            key={item.id}
+                            cx="80"
+                            cy="80"
+                            r="55"
+                            fill="none"
+                            stroke={item.color}
+                            strokeWidth="22"
+                            strokeDasharray={strokeDasharray}
+                            strokeDashoffset={strokeDashoffset}
+                            className="transition-all duration-500 hover:opacity-80 cursor-pointer"
+                          >
+                            <title>{`${item.name}: ${item.count} risque(s) (${item.percentage}%)`}</title>
+                          </circle>
+                        );
+                      });
+                    })()}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                    <span className="text-2xl font-black text-slate-900 leading-tight">{totalRisks}</span>
+                    <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider">Risques</span>
+                  </div>
+                </div>
+
+                {/* Vertical Bar Chart (Diagramme en Barres - Expanding across full container length) */}
+                <div className="flex-1 w-full flex items-end justify-around h-36 pt-4 px-3 border-b border-l border-slate-300 relative gap-2">
+                  <div className="absolute -left-6 top-1/2 -rotate-90 text-[8.5px] font-bold text-slate-400 uppercase tracking-wider">
+                    Volume
+                  </div>
+
+                  {entityBreakdown.map((item) => {
+                    const maxCount = Math.max(...entityBreakdown.map(e => e.count), 1);
+                    const heightPct = Math.max(15, Math.round((item.count / maxCount) * 100));
+                    return (
+                      <div key={item.id} className="flex-1 flex flex-col items-center h-full justify-end group">
+                        <div 
+                          className="w-full max-w-[48px] rounded-t-md transition-all duration-500 flex items-center justify-center shadow-xs hover:brightness-110 relative"
+                          style={{ height: `${heightPct}%`, backgroundColor: item.color }}
+                        >
+                          <span className="font-mono font-black text-[11px] text-white drop-shadow-xs">
+                            {item.count}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-700 truncate w-full text-center mt-1.5" title={item.name}>
+                          {item.name.length > 8 ? item.name.slice(0, 8) + '…' : item.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Color Legend with Counts & Percentages across responsive columns */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-40 overflow-y-auto pr-1 text-[10.5px]">
+                {entityBreakdown.map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-slate-50 border border-slate-150 p-2 rounded-lg">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                      <span className="font-bold text-slate-700 truncate" title={item.name}>{item.name}</span>
+                    </div>
+                    <span className="font-extrabold text-slate-900 font-mono bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0 ml-1">
+                      {item.count} ({item.percentage}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Périmètre : {selectedEntityId === 'all' ? 'Global Groupe' : (tenantConfig.entities.find(e => e.id === selectedEntityId)?.name || selectedEntityId)}</span>
+            <span className="font-semibold text-slate-500">Diagramme en Barres & Cercle</span>
+          </div>
+        </div>
+
+        {/* Featured Excel Combo Chart: Risques par entité du Programme (Grouped Bars + Line % on Dual Y-Axes) */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                Risques par entité du Programme / Cartographie Global
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Histogramme combiné : Niveaux de criticité, Volume total (Cyan) & Proportion relative (Courbe Orange - Axe droit %).
+              </p>
+            </div>
+            <span className="self-start sm:self-center font-mono text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full shrink-0 shadow-2xs">
+              Double Axe Y (Volumes & %)
+            </span>
+          </div>
+
+          {unitCriticalityBreakdown.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucune donnée d'entité disponible pour l'analyse croisée.
+            </div>
+          ) : (
+            <div className="space-y-4 my-2">
+              {/* Dual Y-Axes Chart Area */}
+              <div className="bg-slate-50/90 p-4 rounded-xl border border-slate-200 relative overflow-hidden">
+                {/* SVG Container for the Orange Line Graph (Risques %) */}
+                {(() => {
+                  const globalTotal = filteredRisks.length || 1;
+                  const dataWithPct = unitCriticalityBreakdown.map(u => ({
+                    ...u,
+                    pct: Number(((u.total / globalTotal) * 100).toFixed(1))
+                  }));
+
+                  const maxVol = Math.max(...dataWithPct.map(u => u.total), 1);
+                  const maxPctVal = Math.max(...dataWithPct.map(u => u.pct), 10);
+
+                  // Calculate point coordinates for the line chart (percentage overlay)
+                  const numEntities = dataWithPct.length;
+                  const points = dataWithPct.map((u, idx) => {
+                    // Left offset padding ~ 44px, right offset padding ~ 52px
+                    const xPct = numEntities === 1 ? 50 : 5 + (idx + 0.5) * (90 / numEntities);
+                    const yPct = 100 - (u.pct / Math.max(maxPctVal, 1)) * 80 - 10; // 10% bottom margin, max 90% top
+                    return { ...u, xPct, yPct };
+                  });
+
+                  const linePath = points.length > 0 
+                    ? points.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.xPct}% ${pt.yPct}%`, '')
+                    : '';
+
+                  return (
+                    <div className="relative w-full h-56 pt-2 pb-8 pl-10 pr-12">
+                      {/* Left Y-Axis (Volume Graduation) */}
+                      <div className="absolute left-0 top-2 bottom-8 w-9 flex flex-col justify-between items-end pr-1.5 text-[9.5px] font-bold text-slate-500 border-r border-slate-300">
+                        {[maxVol, Math.round(maxVol * 0.75), Math.round(maxVol * 0.5), Math.round(maxVol * 0.25), 0].map((v, i) => (
+                          <span key={i} className="font-mono">{v}</span>
+                        ))}
+                      </div>
+
+                      {/* Right Y-Axis (Percentage Graduation) */}
+                      <div className="absolute right-0 top-2 bottom-8 w-11 flex flex-col justify-between items-start pl-1.5 text-[9.5px] font-bold font-mono text-orange-600 border-l border-slate-300">
+                        {[
+                          `${maxPctVal.toFixed(1)}%`,
+                          `${(maxPctVal * 0.75).toFixed(1)}%`,
+                          `${(maxPctVal * 0.5).toFixed(1)}%`,
+                          `${(maxPctVal * 0.25).toFixed(1)}%`,
+                          `0.0%`
+                        ].map((v, i) => (
+                          <span key={i}>{v}</span>
+                        ))}
+                      </div>
+
+                      {/* Main Chart Graphic Area */}
+                      <div className="w-full h-full border-b border-slate-300 relative flex items-end justify-around gap-1.5 px-2">
+                        {/* Background Grid Lines */}
+                        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                          <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
+                          <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
+                          <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
+                          <div className="border-b border-dashed border-slate-400 w-full h-0"></div>
+                          <div className="border-b border-slate-400 w-full h-0"></div>
+                        </div>
+
+                        {/* Grouped Bars for each Entity */}
+                        {dataWithPct.map((u) => {
+                          const levelColors = ['#2563EB', '#DC2626', '#16A34A', '#9333EA'];
+                          return (
+                            <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end z-10 group relative min-w-0">
+                              {/* Hover Tooltip */}
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-30 whitespace-nowrap">
+                                <div>{u.name}</div>
+                                <div className="text-orange-300 font-mono">Total : {u.total} ({u.pct}% du global)</div>
+                              </div>
+
+                              {/* Grouped Bar Container */}
+                              <div className="flex items-end gap-0.5 w-full justify-center h-full max-w-[64px]">
+                                {/* Bars for each Criticality Threshold */}
+                                {u.levelCounts.map((level, idx) => {
+                                  const barH = level.count > 0 ? Math.max(8, Math.round((level.count / maxVol) * 100)) : 0;
+                                  const color = levelColors[idx % levelColors.length] || level.color;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="flex-1 rounded-t-xs transition-all duration-300 flex items-end justify-center hover:brightness-125 relative"
+                                      style={{ height: `${barH}%`, backgroundColor: color, minHeight: level.count > 0 ? '4px' : '0' }}
+                                      title={`${level.label}: ${level.count}`}
+                                    >
+                                      {level.count > 0 && barH > 15 && (
+                                        <span className="font-mono font-black text-[8.5px] text-white leading-none mb-0.5 drop-shadow-xs">
+                                          {level.count}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                                {/* Total Risques Bar (Cyan / Turquoise) */}
+                                <div
+                                  className="flex-1 rounded-t-xs transition-all duration-300 flex items-end justify-center bg-cyan-500 hover:brightness-125 relative"
+                                  style={{ height: `${Math.max(10, Math.round((u.total / maxVol) * 100))}%` }}
+                                  title={`Total Risques: ${u.total}`}
+                                >
+                                  <span className="font-mono font-black text-[9px] text-white leading-none mb-0.5 drop-shadow-xs">
+                                    {u.total}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* X-Axis Entity Label */}
+                              <div className="absolute -bottom-6 w-full text-center">
+                                <span className="text-[9.5px] font-extrabold text-slate-800 block truncate" title={u.name}>
+                                  {u.name.length > 7 ? u.name.slice(0, 7) : u.name}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Superimposed SVG Line for "Risques %" */}
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
+                          <path
+                            d={linePath}
+                            fill="none"
+                            stroke="#F97316"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="drop-shadow-xs"
+                          />
+                          {points.map((pt, i) => (
+                            <g key={i}>
+                              <circle
+                                cx={`${pt.xPct}%`}
+                                cy={`${pt.yPct}%`}
+                                r="4"
+                                fill="#F97316"
+                                stroke="#FFFFFF"
+                                strokeWidth="2"
+                                className="drop-shadow-xs"
+                              />
+                              <text
+                                x={`${pt.xPct}%`}
+                                y={`${pt.yPct - 3}%`}
+                                textAnchor="middle"
+                                fill="#EA580C"
+                                fontSize="9"
+                                fontWeight="800"
+                                fontFamily="monospace"
+                              >
+                                {pt.pct}%
+                              </text>
+                            </g>
+                          ))}
+                        </svg>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* X and Y Axis Titles Footer */}
+                <div className="flex justify-between items-center text-[10px] font-extrabold text-slate-500 pt-3 border-t border-slate-200">
+                  <span className="text-slate-600">Axe Y Gauche : Volume de Risques (Groupes de Barres)</span>
+                  <span className="text-slate-800 uppercase tracking-wider">Axe X : Entités / Unités du Programme</span>
+                  <span className="text-orange-600">Axe Y Droit : Proportion (%) des Risques</span>
+                </div>
+              </div>
+
+              {/* Exact Excel Style Bottom Legend */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-[10.5px] font-bold text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-xs bg-[#2563EB] shadow-2xs"></span>
+                  Risques Très élevé
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-xs bg-[#DC2626] shadow-2xs"></span>
+                  Risques Élevé
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-xs bg-[#16A34A] shadow-2xs"></span>
+                  Risques Moyen
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-xs bg-[#9333EA] shadow-2xs"></span>
+                  Risques Faible
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-xs bg-cyan-500 shadow-2xs"></span>
+                  Risques Total
+                </span>
+                <span className="flex items-center gap-1.5 text-orange-600 font-extrabold">
+                  <span className="w-5 h-1 bg-orange-500 rounded-full inline-block relative">
+                    <span className="w-2 h-2 rounded-full bg-orange-600 border border-white absolute -top-0.5 left-1.5"></span>
+                  </span>
+                  Risques %
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Visualisation Conforme Excel / Business Intelligence (Programme 034 / Direction)</span>
+            <span className="font-semibold text-slate-500">Comité de Direction & Cartographie</span>
+          </div>
+        </div>
+
+        {/* Chart 2: Profil de Criticité par Unité (Axe X: Unités / Axe Y: Graduation & Seuils de Criticité) */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                Profil de Criticité par Unité
+              </h3>
+              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                Axe X: Unités | Axe Y: Graduation Criticité
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400">
+              Histogramme vertical : Graduation en ordonnée (Y), Unités en abscisse (X) et nombre inscrit sur chaque barre.
+            </p>
+          </div>
+
+          {unitCriticalityBreakdown.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucune donnée d'unité disponible.
+            </div>
+          ) : (
+            <div className="space-y-3 my-1">
+              {/* Threshold Legend Bar */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-100 text-[9.5px]">
+                <span className="font-bold text-slate-400">Seuils Y :</span>
+                {tenantConfig.matrixThresholds.map((t, i) => (
+                  <span key={i} className="flex items-center gap-1 font-bold px-1.5 py-0.5 rounded border border-slate-150" style={{ backgroundColor: `${t.color}20`, color: t.textColor }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }}></span>
+                    {t.label}
+                  </span>
+                ))}
+              </div>
+
+              {/* True Vertical Column Bar Chart with Axes (X: Units, Y: Graduation Thresholds) */}
+              <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-150">
+                <div className="flex h-44 relative pl-8 pb-6 pr-2 pt-2">
+                  {/* Y-Axis Line & Scale Graduation Marks */}
+                  <div className="absolute left-0 top-2 bottom-6 w-8 flex flex-col justify-between items-end pr-1 text-[9px] font-bold text-slate-400 border-r border-slate-300">
+                    {(() => {
+                      const maxVal = Math.max(...unitCriticalityBreakdown.map(u => u.total), 1);
+                      return [maxVal, Math.round(maxVal * 0.75), Math.round(maxVal * 0.5), Math.round(maxVal * 0.25), 0].map((v, i) => (
+                        <span key={i} className="font-mono leading-none">{v}</span>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* X-Axis Baseline Grid & Columns */}
+                  <div className="flex-1 flex items-end justify-around gap-2 border-b border-slate-300 h-full">
+                    {unitCriticalityBreakdown.map(u => {
+                      const maxVal = Math.max(...unitCriticalityBreakdown.map(item => item.total), 1);
+                      const barHeightPct = Math.max(12, Math.round((u.total / maxVal) * 100));
+
+                      return (
+                        <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                          {/* Total tooltip */}
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-slate-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none shadow-md z-10 whitespace-nowrap">
+                            {u.name} : {u.total} risque(s)
+                          </div>
+
+                          {/* Stacked Vertical Column with Inscribed Numbers */}
+                          <div 
+                            className="w-full max-w-[42px] rounded-t-md overflow-hidden flex flex-col justify-end shadow-xs transition-all duration-300 border border-slate-200"
+                            style={{ height: `${barHeightPct}%` }}
+                          >
+                            {u.levelCounts.map((level, idx) => {
+                              if (level.count === 0) return null;
+                              const segPct = (level.count / u.total) * 100;
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{ height: `${segPct}%`, backgroundColor: level.color }}
+                                  className="w-full flex items-center justify-center transition-all duration-300 relative"
+                                  title={`${u.name} - ${level.label}: ${level.count}`}
+                                >
+                                  {/* Inscribed number inside bar segment */}
+                                  <span 
+                                    className="font-extrabold text-[10.5px] font-mono leading-none drop-shadow-xs"
+                                    style={{ color: level.textColor || '#FFFFFF' }}
+                                  >
+                                    {level.count}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* X-Axis Label (Unit Name) */}
+                          <div className="absolute -bottom-6 w-full text-center">
+                            <span className="text-[9px] font-bold text-slate-700 block truncate" title={u.name}>
+                              {u.name.length > 7 ? u.name.slice(0, 7) + '…' : u.name}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Axis Titles */}
+                <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 pt-2 border-t border-slate-200">
+                  <span>Axe Y : Graduation des Risques</span>
+                  <span>Axe X : Unités Organisationnelles</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Graphique en Colonnes Verticaux</span>
+            <span className="font-semibold text-slate-500">Axe X (Entités) / Y (Graduation)</span>
+          </div>
+        </div>
+
+        {/* Chart 3: Efficacité des Contrôles par Catégorie (Histogramme en Barres) */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Layers className="w-4 h-4 text-indigo-600" />
+                Efficacité des Contrôles par Catégorie
+              </h3>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                Atténuation Brut vs Net
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400">
+              Barres comparatives : Score brut (Ambre) vs Score net résiduel (Émeraude) inscrit sur la barre.
+            </p>
+          </div>
+
+          {categoryControlImpact.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucune donnée thématique disponible.
+            </div>
+          ) : (
+            <div className="space-y-3 my-1">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {categoryControlImpact.map(cat => (
+                  <div key={cat.id} className="space-y-1 bg-slate-50/70 border border-slate-150 p-2.5 rounded-lg">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="font-bold text-slate-800 truncate" title={cat.name}>{cat.name}</span>
+                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono">
+                        -{cat.reductionPercent}% d'atténuation
+                      </span>
+                    </div>
+
+                    {/* Dual Bar Comparison with Inscribed Numbers */}
+                    <div className="space-y-1.5 pt-1">
+                      {/* Score Brut Bar */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-500 w-16 text-right shrink-0">Brut</span>
+                        <div className="flex-1 bg-slate-200 h-4 rounded-md overflow-hidden flex items-center shadow-2xs">
+                          <div 
+                            className="bg-amber-500 h-full rounded-md transition-all duration-500 flex items-center justify-end pr-2"
+                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgBrut / 64) * 100))}%` }}
+                          >
+                            <span className="text-[10px] font-extrabold text-white font-mono leading-none">
+                              {cat.avgBrut}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Score Residuel Bar */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-indigo-700 w-16 text-right shrink-0">Net Résiduel</span>
+                        <div className="flex-1 bg-slate-200 h-4 rounded-md overflow-hidden flex items-center shadow-2xs">
+                          <div 
+                            className="bg-emerald-500 h-full rounded-md transition-all duration-500 flex items-center justify-end pr-2"
+                            style={{ width: `${Math.max(12, Math.min(100, (cat.avgResiduel / 64) * 100))}%` }}
+                          >
+                            <span className="text-[10px] font-extrabold text-white font-mono leading-none">
+                              {cat.avgResiduel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded bg-amber-500"></span> Score Brut
+              <span className="inline-block w-2.5 h-2.5 rounded bg-emerald-500"></span> Score Net
+            </span>
+            <span className="font-semibold text-slate-500">Diagramme en Barres Comparatif</span>
+          </div>
+        </div>
+
+        {/* Chart 4: Couverture & Plans d'Action par Niveau de Criticité */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-indigo-600" />
+                Couverture des Plans d'Action par Niveau de Criticité
+              </h3>
+              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                Par Criticité
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400">
+              Barres empilées avec effectifs inscrits : Risques couverts (Vert) vs Orphelins sans action (Ambre/Rouge).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 my-1">
+            {criticalityActionCoverage.map((item, idx) => (
+              <div key={idx} className="p-3 rounded-xl border border-slate-150 bg-slate-50/70 space-y-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span 
+                      className="px-2 py-0.5 rounded text-[9.5px] font-bold border border-white/20 shadow-2xs"
+                      style={{ backgroundColor: item.color, color: item.textColor }}
+                    >
+                      {item.label}
+                    </span>
+                    <span className="font-extrabold text-slate-800 font-mono">
+                      {item.totalCount} risque(s)
+                    </span>
+                  </div>
+
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${
+                    item.orphanCount === 0 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}>
+                    {item.coveredPercent}% Couverts
+                  </span>
+                </div>
+
+                {/* Progress Bar of Action Coverage with Inscribed Numbers & Percentages */}
+                <div className="space-y-1">
+                  <div className="w-full bg-slate-200 h-6 rounded-lg overflow-hidden flex shadow-2xs">
+                    {item.withActionsCount > 0 && (
+                      <div 
+                        className="bg-emerald-500 h-full transition-all duration-500 flex items-center justify-center font-mono font-extrabold text-[10.5px] text-white" 
+                        style={{ width: `${item.coveredPercent}%` }}
+                        title={`${item.withActionsCount} couverts`}
+                      >
+                        {item.withActionsCount} ({item.coveredPercent}%)
+                      </div>
+                    )}
+                    {item.orphanCount > 0 && (
+                      <div 
+                        className="bg-amber-500 h-full transition-all duration-500 flex items-center justify-center font-mono font-extrabold text-[10.5px] text-white" 
+                        style={{ width: `${100 - item.coveredPercent}%` }}
+                        title={`${item.orphanCount} orphelins (sans action)`}
+                      >
+                        {item.orphanCount} ({100 - item.coveredPercent}%)
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center text-[9.5px] text-slate-500 pt-0.5">
+                    <span className="font-semibold text-emerald-700">
+                      ✓ {item.withActionsCount} sous plan ({item.totalActionsCount} action{item.totalActionsCount > 1 ? 's' : ''})
+                    </span>
+                    {item.orphanCount > 0 ? (
+                      <span className="text-amber-700 font-bold">⚠️ {item.orphanCount} sans action</span>
+                    ) : (
+                      <span className="text-emerald-600 font-bold">✓ 100% traités</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded bg-emerald-500"></span> Couvert
+              <span className="inline-block w-2.5 h-2.5 rounded bg-amber-500"></span> Sans Action
+            </span>
+            <span className="font-semibold text-slate-500">Diagramme en Barres Empilées</span>
+          </div>
+        </div>
+
+        {/* Chart 5: Répartition des Catégories de Risques par Unité (Diagramme en Barres avec Pourcentages, Légende & Nombres) */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                Répartition des Catégories de Risques par Unité
+              </h3>
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                Histogramme en Barres | Effectifs & Pourcentages (%)
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400">
+              Barres empilées par unité avec le nombre exact et le pourcentage (%) inscrits sur chaque segment de catégorie.
+            </p>
+          </div>
+
+          {/* Interactive Legend for Categories */}
+          <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 border border-slate-150 rounded-lg text-[10.5px]">
+            <span className="font-bold text-slate-500">Légende des Catégories :</span>
+            {(tenantConfig.categories || []).map((cat, idx) => {
+              const catPalette = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1', '#F97316'];
+              const color = cat.color || catPalette[idx % catPalette.length];
+              return (
+                <span key={cat.id || idx} className="flex items-center gap-1.5 font-bold px-2 py-0.5 rounded border border-slate-200 bg-white text-slate-800 shadow-2xs">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }}></span>
+                  {cat.name}
+                </span>
+              );
+            })}
+          </div>
+
+          {unitCategoryBreakdown.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 italic text-xs">
+              Aucune donnée d'unité ou de catégorie disponible.
+            </div>
+          ) : (
+            <div className="space-y-3.5 my-1 max-h-72 overflow-y-auto pr-1">
+              {unitCategoryBreakdown.map(u => (
+                <div key={u.id} className="p-3 rounded-xl border border-slate-150 bg-slate-50/60 space-y-2">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span className="font-extrabold text-slate-900">{u.name}</span>
+                    </div>
+                    <span className="font-mono text-[10.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                      Total Unité : {u.total} risque(s) (100%)
+                    </span>
+                  </div>
+
+                  {/* Stacked Horizontal Bar with Inscribed Count AND Percentage */}
+                  <div className="w-full bg-slate-200 h-6.5 rounded-lg overflow-hidden flex shadow-2xs">
+                    {u.catCounts.map((cat, idx) => {
+                      if (cat.count === 0) return null;
+                      return (
+                        <div
+                          key={idx}
+                          style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
+                          className="h-full flex items-center justify-center transition-all duration-300 relative group cursor-pointer"
+                          title={`${u.name} - ${cat.name}: ${cat.count} risque(s) (${cat.percentage}%)`}
+                        >
+                          {/* Inscribed label with count and percentage */}
+                          <span className="font-extrabold text-[10px] font-mono text-white drop-shadow-xs px-1 truncate">
+                            {cat.percentage >= 10 ? `${cat.count} (${cat.percentage}%)` : cat.count}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Detailed Category Badges under the bar */}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {u.catCounts.map((cat, idx) => cat.count > 0 && (
+                      <span 
+                        key={idx} 
+                        className="px-2 py-0.5 rounded text-[9.5px] font-bold border flex items-center gap-1 shadow-2xs"
+                        style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}40` }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
+                        {cat.name} : <strong className="font-extrabold font-mono">{cat.count}</strong> ({cat.percentage}%)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Graphique Croisé : Unités (Axes) x Catégories de Risques</span>
+            <span className="font-semibold text-slate-500">Pourcentages (%) & Effectifs Inscrits</span>
+          </div>
+        </div>
+
       </div>
 
       {/* Multi-level Drill-down Panel (Renders when a Risk is selected) */}

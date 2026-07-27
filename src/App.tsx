@@ -130,9 +130,9 @@ export default function App() {
           ...localR,
           ...dbR,
           title: dbR.title !== undefined && dbR.title !== null && dbR.title.trim() !== '' ? dbR.title : localR.title,
-          description: (dbR.description && dbR.description.trim() !== '') ? dbR.description : (localR.description || ''),
-          causes: (dbR.causes && dbR.causes.trim() !== '') ? dbR.causes : (localR.causes || ''),
-          consequences: (dbR.consequences && dbR.consequences.trim() !== '') ? dbR.consequences : (localR.consequences || ''),
+          description: dbR.description !== undefined && dbR.description !== null ? dbR.description : (localR.description || ''),
+          causes: dbR.causes !== undefined && dbR.causes !== null ? dbR.causes : (localR.causes || ''),
+          consequences: dbR.consequences !== undefined && dbR.consequences !== null ? dbR.consequences : (localR.consequences || ''),
           categoryId: dbR.categoryId || localR.categoryId,
           entityId: dbR.entityId || localR.entityId,
           frequencyValue: dbR.frequencyValue ?? localR.frequencyValue,
@@ -167,6 +167,44 @@ export default function App() {
         merged.push({ ...localA, ...dbA });
       }
     }
+    return merged;
+  };
+
+  const mergeTenantsWithLocal = (dbTenants: TenantConfig[], localTenants: TenantConfig[]): TenantConfig[] => {
+    if (!localTenants || localTenants.length === 0) return dbTenants || [SOGESTI_CONFIG, AEROTECH_CONFIG];
+    if (!dbTenants || dbTenants.length === 0) return localTenants;
+
+    const dbMap = new Map<string, TenantConfig>(dbTenants.map(t => [t.id, t]));
+    const localMap = new Map<string, TenantConfig>(localTenants.map(t => [t.id, t]));
+    const merged: TenantConfig[] = [];
+
+    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
+    for (const id of allIds) {
+      const localT = localMap.get(id);
+      const dbT = dbMap.get(id);
+
+      if (localT && !dbT) {
+        merged.push(localT);
+      } else if (dbT && !localT) {
+        merged.push(dbT);
+      } else if (localT && dbT) {
+        // Merge DB and Local: if local has custom scales, thresholds, or formula, combine them intelligently
+        merged.push({
+          ...dbT,
+          ...localT,
+          companyName: dbT.companyName || localT.companyName,
+          logoUrl: dbT.logoUrl || localT.logoUrl,
+          scales: (localT.scales?.frequency?.length ? localT.scales : dbT.scales) || dbT.scales || localT.scales,
+          matrixSize: localT.matrixSize || dbT.matrixSize || 4,
+          matrixThresholds: (localT.matrixThresholds?.length ? localT.matrixThresholds : dbT.matrixThresholds) || dbT.matrixThresholds || localT.matrixThresholds,
+          formula: (localT.formula?.expression ? localT.formula : dbT.formula) || dbT.formula || localT.formula,
+          categories: (localT.categories?.length ? localT.categories : dbT.categories) || dbT.categories || localT.categories,
+          entities: (localT.entities?.length ? localT.entities : dbT.entities) || dbT.entities || localT.entities,
+          workflowSteps: (localT.workflowSteps?.length ? localT.workflowSteps : dbT.workflowSteps) || dbT.workflowSteps || localT.workflowSteps,
+        });
+      }
+    }
+
     return merged;
   };
 
@@ -233,7 +271,10 @@ export default function App() {
           const res = await pullAllFromSupabase(client);
           if (res.success && res.data) {
             const d = res.data;
-            if (d.tenants?.length) setTenants(d.tenants);
+            const finalTenants = mergeTenantsWithLocal(d.tenants || [], localDataset?.tenants || []);
+            const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG];
+            setTenants(tenantsToSet);
+
             if (d.users?.length) {
               const mergedUsers = [...d.users];
               PRESET_USERS.forEach(pu => {
@@ -270,6 +311,7 @@ export default function App() {
 
             const mergedDataset = {
               ...d,
+              tenants: tenantsToSet,
               risks: finalRisks,
               actions: finalActions,
               sessions: sessionsToSet
