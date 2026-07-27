@@ -63,6 +63,43 @@ export function getCriticalityFromThresholds(score: number, thresholds: MatrixTh
 }
 
 /**
+ * Returns exact background, border, and text colors for a threshold label or threshold object
+ */
+export function getThresholdColorStyles(critLabel: string, thresholds?: MatrixThreshold[]) {
+  const match = (thresholds || []).find(t => t.label.toLowerCase() === critLabel.toLowerCase());
+  if (match) {
+    const preset = COLOR_PRESETS.find(p => p.id === match.color || p.colorClass === match.color);
+    if (preset) {
+      return { bg: preset.bgColorHex, border: preset.textColor + '60', text: preset.textColor, rawColor: match.color };
+    }
+    if (match.color && match.color.startsWith('#')) {
+      return { bg: match.color + '20', border: match.color + '80', text: match.textColor || match.color, rawColor: match.color };
+    }
+    if (match.textColor) {
+      return { bg: '#F8FAFC', border: match.textColor + '80', text: match.textColor, rawColor: match.color };
+    }
+  }
+
+  const labelLower = critLabel.toLowerCase();
+  if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas') || labelLower.includes('très faible') || labelLower.includes('insignifiant') || labelLower.includes('négligeable')) {
+    return { bg: '#dcfce7', border: '#059669', text: '#047857', rawColor: '#059669' };
+  }
+  if (labelLower.includes('modéré') || labelLower.includes('moyen')) {
+    return { bg: '#fef3c7', border: '#d97706', text: '#b45309', rawColor: '#d97706' };
+  }
+  if (labelLower.includes('élevé') || labelLower.includes('fort') || labelLower.includes('significatif')) {
+    return { bg: '#ffedd5', border: '#ea580c', text: '#c2410c', rawColor: '#ea580c' };
+  }
+  if (labelLower.includes('critique') || labelLower.includes('sévère') || labelLower.includes('majeur')) {
+    return { bg: '#fee2e2', border: '#dc2626', text: '#b91c1c', rawColor: '#dc2626' };
+  }
+  if (labelLower.includes('catastrophique')) {
+    return { bg: '#f3e8ff', border: '#9333ea', text: '#7e22ce', rawColor: '#9333ea' };
+  }
+  return { bg: '#f1f5f9', border: '#475569', text: '#334155', rawColor: '#475569' };
+}
+
+/**
  * Generates default thresholds for a matrix of size (e.g. 3 for 3x3, 4 for 4x4, 5 for 5x5)
  * and a chosen number of graduation levels (e.g. 3, 4, 5, 6).
  */

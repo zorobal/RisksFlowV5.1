@@ -27,7 +27,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
-import { getCriticalityFromThresholds, COLOR_PRESETS } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, getThresholdColorStyles, COLOR_PRESETS } from '../utils/riskUtils';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
@@ -490,36 +490,27 @@ export default function DashboardModule({
 
   // Matrix Cell color functions
   const getVibrantColors = (critLabel: string) => {
-    const match = (tenantConfig.matrixThresholds || []).find(t => t.label === critLabel);
-    if (match) {
-      const preset = COLOR_PRESETS.find(p => p.colorClass === match.color);
-      if (preset) {
-        return { bg: preset.bgColorHex, border: preset.textColor + '60', text: preset.textColor };
-      }
-      if (match.textColor) {
-        return { bg: '#F8FAFC', border: match.textColor + '80', text: match.textColor };
-      }
-    }
-    const labelLower = critLabel.toLowerCase();
-    if (labelLower.includes('faible') || labelLower.includes('mineur') || labelLower.includes('bas') || labelLower.includes('très faible')) {
-      return { bg: '#E6FAF0', border: '#10B981', text: '#047857' };
-    }
-    if (labelLower.includes('modéré') || labelLower.includes('moyen') || labelLower.includes('significatif')) {
-      return { bg: '#FFFBEB', border: '#F59E0B', text: '#B45309' };
-    }
-    if (labelLower.includes('élevé') || labelLower.includes('fort')) {
-      return { bg: '#FFEDD5', border: '#EA580C', text: '#C2410C' };
-    }
-    return { bg: '#FEF2F2', border: '#EF4444', text: '#B91C1C' };
+    return getThresholdColorStyles(critLabel, tenantConfig.matrixThresholds);
   };
 
   // Helper to determine cell criticality label
   const getCellCriticality = (f: number, i: number, type: 'brut' | 'residuel') => {
-    const product = f * i;
-    // For residuel matrix, let's estimate product with a generic control factor of 2.
-    // Real risks score determines color. We can approximate cell color based on scoreBrut or thresholds.
-    const scoreVal = type === 'brut' ? product : Math.max(1, Math.round(product / 2));
-    return getCriticality(scoreVal);
+    const cellRisks = getRisksInCell(f, i, type);
+    if (cellRisks.length > 0) {
+      const avgScore = cellRisks.reduce((sum, r) => sum + (type === 'brut' ? r.scoreBrut : r.scoreResiduel), 0) / cellRisks.length;
+      return getCriticality(Math.round(avgScore));
+    }
+
+    if (type === 'brut') {
+      const product = f * i;
+      return getCriticality(product);
+    } else {
+      // Residual matrix score estimation for empty cells (f = Frequency 1..size, i = Control 1..size)
+      const maxBrutForFreq = f * size;
+      const mitigationFactor = (size - i + 1) / size;
+      const estimatedResiduel = Math.max(1, Math.round(maxBrutForFreq * mitigationFactor));
+      return getCriticality(estimatedResiduel);
+    }
   };
 
   // Filter risks in a specific matrix cell
