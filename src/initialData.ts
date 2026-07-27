@@ -357,7 +357,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-07-30',
     priority: 'Critique',
     status: 'En cours',
-    progress: 40
+    progress: 40,
+    tenantId: 'tenant1'
   },
   {
     id: 'a2',
@@ -368,7 +369,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-06-25',
     priority: 'Haute',
     status: 'En cours',
-    progress: 75
+    progress: 75,
+    tenantId: 'tenant1'
   },
   {
     id: 'a3',
@@ -379,7 +381,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-08-15',
     priority: 'Moyenne',
     status: 'À planifier',
-    progress: 0
+    progress: 0,
+    tenantId: 'tenant1'
   },
   {
     id: 'a4',
@@ -390,7 +393,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-05-10',
     priority: 'Moyenne',
     status: 'Réalisé',
-    progress: 100
+    progress: 100,
+    tenantId: 'tenant1'
   },
   {
     id: 'a5',
@@ -401,7 +405,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-06-20',
     priority: 'Critique',
     status: 'En cours',
-    progress: 50
+    progress: 50,
+    tenantId: 'tenant1'
   },
   {
     id: 'a6',
@@ -412,7 +417,8 @@ export const PRESET_ACTIONS: ActionPlan[] = [
     dueDate: '2026-09-01',
     priority: 'Haute',
     status: 'À planifier',
-    progress: 10
+    progress: 10,
+    tenantId: 'tenant2'
   }
 ];
 
@@ -530,7 +536,8 @@ export const PRESET_AUDIT_MISSIONS: AuditMission[] = [
     status: 'En cours',
     dateDebut: '2026-06-01',
     dateFin: '2026-07-15',
-    piloteFonctionId: 'f_audit'
+    piloteFonctionId: 'f_audit',
+    tenantId: 'tenant1'
   },
   {
     id: 'm2',
@@ -540,7 +547,8 @@ export const PRESET_AUDIT_MISSIONS: AuditMission[] = [
     status: 'Planifiée',
     dateDebut: '2026-09-01',
     dateFin: '2026-09-30',
-    piloteFonctionId: 'f_audit'
+    piloteFonctionId: 'f_audit',
+    tenantId: 'tenant1'
   }
 ];
 
@@ -553,7 +561,8 @@ export const PRESET_AUDIT_FINDINGS: AuditFinding[] = [
     gravite: 'Élevée',
     recommandation: 'Déployer immédiatement un WAF cloud sur la passerelle d\'accès principale.',
     statut: 'En remédiation',
-    planRemediationId: 'a1'
+    planRemediationId: 'a1',
+    tenantId: 'tenant1'
   },
   {
     id: 'f_2',
@@ -562,14 +571,15 @@ export const PRESET_AUDIT_FINDINGS: AuditFinding[] = [
     description: 'Certains anciens comptes administrateurs n\'ont pas de complexité renforcée ni d\'obligation MFA.',
     gravite: 'Critique',
     recommandation: 'Forcer l\'activation MFA globale sur toutes les consoles de management.',
-    statut: 'Ouvert'
+    statut: 'Ouvert',
+    tenantId: 'tenant1'
   }
 ];
 
 // COMPLIANCE FRAMEWORKS & OBLIGATIONS (Section 3.5)
 export const PRESET_COMPLIANCE_FRAMEWORKS: ComplianceFramework[] = [
-  { id: 'cf_rgpd', nom: 'Règlement Général sur la Protection des Données (RGPD)', version: '2018/679', secteur: 'Transverse / Numérique' },
-  { id: 'cf_iso27001', nom: 'ISO/IEC 27001 - Management de la sécurité des SI', version: '2022', secteur: 'Sécurité de l\'Information' }
+  { id: 'cf_rgpd', nom: 'Règlement Général sur la Protection des Données (RGPD)', version: '2018/679', secteur: 'Transverse / Numérique', tenantId: 'tenant1' },
+  { id: 'cf_iso27001', nom: 'ISO/IEC 27001 - Management de la sécurité des SI', version: '2022', secteur: 'Sécurité de l\'Information', tenantId: 'tenant1' }
 ];
 
 export const PRESET_COMPLIANCE_OBLIGATIONS: ComplianceObligation[] = [
@@ -580,7 +590,8 @@ export const PRESET_COMPLIANCE_OBLIGATIONS: ComplianceObligation[] = [
     description: 'Tenir un registre détaillé des traitements de données à caractère personnel sous la responsabilité de la structure.',
     statut: 'Partiel',
     responsableFonctionId: 'f_legal',
-    derniereRevue: '2026-05-10'
+    derniereRevue: '2026-05-10',
+    tenantId: 'tenant1'
   },
   {
     id: 'co_2',
@@ -589,7 +600,8 @@ export const PRESET_COMPLIANCE_OBLIGATIONS: ComplianceObligation[] = [
     description: 'Nommer officiellement un DPO et déclarer ses coordonnées à l\'autorité de contrôle.',
     statut: 'Conforme',
     responsableFonctionId: 'f_legal',
-    derniereRevue: '2026-06-01'
+    derniereRevue: '2026-06-01',
+    tenantId: 'tenant1'
   },
   {
     id: 'co_3',
@@ -598,7 +610,8 @@ export const PRESET_COMPLIANCE_OBLIGATIONS: ComplianceObligation[] = [
     description: 'Les actifs associés à l\'information et aux installations de traitement de l\'information doivent être identifiés et répertoriés.',
     statut: 'Non conforme',
     responsableFonctionId: 'f_cro',
-    derniereRevue: '2026-04-15'
+    derniereRevue: '2026-04-15',
+    tenantId: 'tenant1'
   }
 ];
 
@@ -610,7 +623,8 @@ export const PRESET_COMPLIANCE_INCIDENTS: ComplianceIncident[] = [
     description: 'Un e-mail frauduleux a tenté d\'usurper l\'identité de la DAF. Le compte d\'un comptable a été bloqué préventivement.',
     impactFinancier: 0,
     statutDeclaration: 'Résolu',
-    mesuresPrises: 'Réinitialisation immédiate du mot de passe et formation flash de l\'équipe.'
+    mesuresPrises: 'Réinitialisation immédiate du mot de passe et formation flash de l\'équipe.',
+    tenantId: 'tenant1'
   },
   {
     id: 'inc_2',
@@ -619,7 +633,8 @@ export const PRESET_COMPLIANCE_INCIDENTS: ComplianceIncident[] = [
     description: 'Un fichier contenant 120 adresses e-mails de prospects a été partagé par erreur via un lien cloud public.',
     impactFinancier: 1200,
     statutDeclaration: 'Déclaré CNIL',
-    mesuresPrises: 'Révocation immédiate du lien de partage public et notification des 120 destinataires.'
+    mesuresPrises: 'Révocation immédiate du lien de partage public et notification des 120 destinataires.',
+    tenantId: 'tenant1'
   }
 ];
 

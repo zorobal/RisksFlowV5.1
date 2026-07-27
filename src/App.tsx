@@ -20,7 +20,7 @@ import LoginModule from './components/LoginModule';
 import DemoModule from './components/DemoModule';
 import { generateScalesForSize } from './components/ConfigModule';
 import { generateDefaultThresholds } from './utils/riskUtils';
-import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase } from './lib/supabase';
+import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase, deleteRowFromSupabase } from './lib/supabase';
 
 import { 
   SOGESTI_CONFIG, 
@@ -44,6 +44,8 @@ import {
   PRESET_HISTORIQUE_LICENCES,
   PRESET_SESSIONS
 } from './initialData';
+
+const PRESET_RISKS = [...SOGESTI_RISKS, ...AEROTECH_RISKS];
 
 import { CheckCircle, AlertTriangle, Save, Database, X } from 'lucide-react';
 
@@ -170,76 +172,112 @@ export default function App() {
     return merged;
   };
 
-  const mergeTenantsWithLocal = (dbTenants: TenantConfig[], localTenants: TenantConfig[]): TenantConfig[] => {
-    if (!localTenants || localTenants.length === 0) return dbTenants || [SOGESTI_CONFIG, AEROTECH_CONFIG];
-    if (!dbTenants || dbTenants.length === 0) return localTenants;
+  const applySupabaseData = (d: any) => {
+    if (!d) return;
 
-    const dbMap = new Map<string, TenantConfig>(dbTenants.map(t => [t.id, t]));
-    const localMap = new Map<string, TenantConfig>(localTenants.map(t => [t.id, t]));
-    const merged: TenantConfig[] = [];
+    // Check if database is completely uninitialized
+    const isDbUninitialized = (!d.tenants || d.tenants.length === 0) &&
+                              (!d.users || d.users.length === 0) &&
+                              (!d.risks || d.risks.length === 0);
 
-    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
-    for (const id of allIds) {
-      const localT = localMap.get(id);
-      const dbT = dbMap.get(id);
+    if (isDbUninitialized) {
+      console.log('[Supabase Init] Initializing default seed data in empty Supabase DB...');
+      const seedTenants = [SOGESTI_CONFIG, AEROTECH_CONFIG];
+      setTenants(seedTenants);
+      setUsers(PRESET_USERS);
+      setRisks(PRESET_RISKS);
+      setActions(PRESET_ACTIONS);
+      setAuditLogs(PRESET_AUDIT_LOGS);
+      setFonctions(PRESET_FONCTIONS);
+      setAffectations(PRESET_AFFECTATIONS);
+      setRules(PRESET_RULES);
+      setAccessProfiles(PRESET_ACCESS_PROFILES);
+      setAuditMissions(PRESET_AUDIT_MISSIONS);
+      setAuditFindings(PRESET_AUDIT_FINDINGS);
+      setComplianceFrameworks(PRESET_COMPLIANCE_FRAMEWORKS);
+      setComplianceObligations(PRESET_COMPLIANCE_OBLIGATIONS);
+      setComplianceIncidents(PRESET_COMPLIANCE_INCIDENTS);
+      setEntreprises(PRESET_ENTREPRISES);
+      setLicences(PRESET_LICENCES);
+      setHistoriqueLicences(PRESET_HISTORIQUE_LICENCES);
+      setSessions(PRESET_SESSIONS);
 
-      if (localT && !dbT) {
-        merged.push(localT);
-      } else if (dbT && !localT) {
-        merged.push(dbT);
-      } else if (localT && dbT) {
-        // DB is the single source of truth for organization parameters when present in Supabase
-        merged.push({
-          ...localT,
-          ...dbT,
-          companyName: dbT.companyName || localT.companyName,
-          logoUrl: dbT.logoUrl || localT.logoUrl,
-          scales: (dbT.scales?.frequency?.length ? dbT.scales : localT.scales) || localT.scales,
-          matrixSize: dbT.matrixSize || localT.matrixSize || 4,
-          matrixThresholds: (dbT.matrixThresholds?.length ? dbT.matrixThresholds : localT.matrixThresholds) || localT.matrixThresholds,
-          formula: (dbT.formula?.expression ? dbT.formula : localT.formula) || localT.formula,
-          categories: (dbT.categories?.length ? dbT.categories : localT.categories) || localT.categories,
-          entities: (dbT.entities?.length ? dbT.entities : localT.entities) || localT.entities,
-          workflowSteps: (dbT.workflowSteps?.length ? dbT.workflowSteps : localT.workflowSteps) || localT.workflowSteps,
+      const client = getSupabaseClient();
+      if (client) {
+        pushAllToSupabase(client, {
+          tenants: seedTenants,
+          users: PRESET_USERS,
+          risks: PRESET_RISKS,
+          actions: PRESET_ACTIONS,
+          auditLogs: PRESET_AUDIT_LOGS,
+          fonctions: PRESET_FONCTIONS,
+          affectations: PRESET_AFFECTATIONS,
+          rules: PRESET_RULES,
+          accessProfiles: PRESET_ACCESS_PROFILES,
+          auditMissions: PRESET_AUDIT_MISSIONS,
+          auditFindings: PRESET_AUDIT_FINDINGS,
+          complianceFrameworks: PRESET_COMPLIANCE_FRAMEWORKS,
+          complianceObligations: PRESET_COMPLIANCE_OBLIGATIONS,
+          complianceIncidents: PRESET_COMPLIANCE_INCIDENTS,
+          entreprises: PRESET_ENTREPRISES,
+          licences: PRESET_LICENCES,
+          historiqueLicences: PRESET_HISTORIQUE_LICENCES,
+          sessions: PRESET_SESSIONS
         });
       }
+      return;
     }
 
-    return merged;
-  };
+    // Single source of truth: Supabase DB
+    if (d.tenants && d.tenants.length > 0) setTenants(d.tenants);
+    else setTenants([SOGESTI_CONFIG, AEROTECH_CONFIG]);
 
-  const mergeSessionsWithLocal = (dbSessions: SessionExercice[], localSessions: SessionExercice[]): SessionExercice[] => {
-    if (!localSessions || localSessions.length === 0) return dbSessions;
-    if (!dbSessions || dbSessions.length === 0) return localSessions;
-
-    const dbMap = new Map<string, SessionExercice>(dbSessions.map(s => [s.id, s]));
-    const localMap = new Map<string, SessionExercice>(localSessions.map(s => [s.id, s]));
-    const merged: SessionExercice[] = [];
-
-    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
-    for (const id of allIds) {
-      const localS = localMap.get(id);
-      const dbS = dbMap.get(id);
-      if (localS && !dbS) merged.push(localS);
-      else if (dbS && !localS) merged.push(dbS);
-      else if (localS && dbS) {
-        merged.push({ ...localS, ...dbS });
-      }
+    if (d.users && d.users.length > 0) {
+      const mergedUsers = [...d.users];
+      PRESET_USERS.forEach(pu => {
+        if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
+          mergedUsers.push(pu);
+        }
+      });
+      setUsers(mergedUsers);
+    } else {
+      setUsers(PRESET_USERS);
     }
-    return merged;
+
+    setRisks(d.risks || []);
+    setActions(d.actions || []);
+    setSessions(d.sessions && d.sessions.length > 0 ? d.sessions : PRESET_SESSIONS);
+    setAuditLogs(d.auditLogs || []);
+    setFonctions(d.fonctions || []);
+    setAffectations(d.affectations || []);
+    setRules(d.rules || []);
+    setAccessProfiles(d.accessProfiles && d.accessProfiles.length > 0 ? d.accessProfiles : PRESET_ACCESS_PROFILES);
+    setAuditMissions(d.auditMissions || []);
+    setAuditFindings(d.auditFindings || []);
+    setComplianceFrameworks(d.complianceFrameworks && d.complianceFrameworks.length > 0 ? d.complianceFrameworks : PRESET_COMPLIANCE_FRAMEWORKS);
+    setComplianceObligations(d.complianceObligations || []);
+    setComplianceIncidents(d.complianceIncidents || []);
+    setEntreprises(d.entreprises || []);
+    setLicences(d.licences || []);
+    setHistoriqueLicences(d.historiqueLicences || []);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(d));
+    } catch (e) {
+      console.error('[LocalStorage Sync Cache Error]', e);
+    }
   };
 
   // 1. Initialisation avec Restauration LocalStorage Immédiate + Chargement Supabase
   useEffect(() => {
     async function initData() {
       setIsLoading(true);
-      let localDataset: any = null;
 
-      // A. Restauration instantanée depuis LocalStorage si disponible
+      // A. Restauration instantanée depuis LocalStorage pour affichage immédiat sans latence
       try {
         const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (cached) {
-          localDataset = JSON.parse(cached);
+          const localDataset = JSON.parse(cached);
           if (localDataset.tenants?.length) setTenants(localDataset.tenants);
           if (localDataset.users?.length) setUsers(localDataset.users);
           if (localDataset.risks?.length) setRisks(localDataset.risks);
@@ -263,68 +301,14 @@ export default function App() {
         console.error('[LocalStorage Init Error]', e);
       }
 
-      // B. Chargement depuis Supabase en arrière-plan
+      // B. Chargement depuis Supabase comme SOURCE DE VÉRITÉ ABSOLUE
       const client = getSupabaseClient();
       if (client) {
         try {
-          console.log('[Supabase Sync] Synchronisation depuis la BDD Supabase...');
+          console.log('[Supabase Sync] Chargement de la source de vérité Supabase...');
           const res = await pullAllFromSupabase(client);
           if (res.success && res.data) {
-            const d = res.data;
-            const finalTenants = mergeTenantsWithLocal(d.tenants || [], localDataset?.tenants || []);
-            const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG];
-            setTenants(tenantsToSet);
-
-            if (d.users?.length) {
-              const mergedUsers = [...d.users];
-              PRESET_USERS.forEach(pu => {
-                if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
-                  mergedUsers.push(pu);
-                }
-              });
-              setUsers(mergedUsers);
-            }
-
-            const finalRisks = mergeRisksWithLocal(d.risks || [], localDataset?.risks || []);
-            setRisks(finalRisks);
-
-            const finalActions = mergeActionsWithLocal(d.actions || [], localDataset?.actions || []);
-            setActions(finalActions);
-
-            const finalSessions = mergeSessionsWithLocal(d.sessions || [], localDataset?.sessions || []);
-            const sessionsToSet = finalSessions.length > 0 ? finalSessions : PRESET_SESSIONS;
-            setSessions(sessionsToSet);
-
-            if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
-            if (d.fonctions?.length) setFonctions(d.fonctions);
-            if (d.affectations?.length) setAffectations(d.affectations);
-            if (d.rules?.length) setRules(d.rules);
-            if (d.accessProfiles?.length) setAccessProfiles(d.accessProfiles);
-            if (d.auditMissions?.length) setAuditMissions(d.auditMissions);
-            if (d.auditFindings?.length) setAuditFindings(d.auditFindings);
-            if (d.complianceFrameworks?.length) setComplianceFrameworks(d.complianceFrameworks);
-            if (d.complianceObligations?.length) setComplianceObligations(d.complianceObligations);
-            if (d.complianceIncidents?.length) setComplianceIncidents(d.complianceIncidents);
-            if (d.entreprises?.length) setEntreprises(d.entreprises);
-            if (d.licences?.length) setLicences(d.licences);
-            if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
-
-            const mergedDataset = {
-              ...d,
-              tenants: tenantsToSet,
-              risks: finalRisks,
-              actions: finalActions,
-              sessions: sessionsToSet
-            };
-
-            try {
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedDataset));
-            } catch (e) {
-              console.error('[LocalStorage Sync Cache Error]', e);
-            }
-
-            // Sync updated dataset back to Supabase
-            pushAllToSupabase(client, mergedDataset);
+            applySupabaseData(res.data);
           }
         } catch (error) {
           console.error('[Supabase Error] Échec de récupération BDD:', error);
@@ -334,6 +318,38 @@ export default function App() {
     }
 
     initData();
+  }, []);
+
+  // 1b. Realtime & Auto-Refresh au changement d'onglet/focus pour synchronisation multi-poste
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const refreshFromSupabase = async () => {
+      console.log('[Multi-Poste Sync] Rafraîchissement depuis Supabase...');
+      const res = await pullAllFromSupabase(client);
+      if (res.success && res.data) {
+        applySupabaseData(res.data);
+      }
+    };
+
+    const channel = client.channel('public:grc_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        console.log('[Realtime Trigger] Modification détectée sur Supabase');
+        refreshFromSupabase();
+      })
+      .subscribe();
+
+    const handleFocus = () => {
+      refreshFromSupabase();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      client.removeChannel(channel);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // 2. Persistance locale instantanée + Synchronisation automatique vers Supabase (Throttled par 1s)
@@ -495,16 +511,65 @@ export default function App() {
   const activeEntreprise = entreprises.find(e => e.id === activeTenantId) || entreprises.find(e => e.id === activeTenantConfig.id);
   const activeLicence = licences.find(l => l.entrepriseId === activeTenantId) || licences.find(l => l.entrepriseId === activeTenantConfig.id);
   
-  const activeTenantRisks = risks.filter(r => {
-    if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1' || !r.tenantId;
-    if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2' || !r.tenantId;
-    return !r.tenantId || r.tenantId === activeTenantId || r.tenantId === activeEntreprise?.id;
-  });
+  const activeTenantRisks = useMemo(() => {
+    return risks.filter(r => {
+      if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1' || !r.tenantId;
+      if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2';
+      return r.tenantId === activeTenantId || (activeEntreprise?.id && r.tenantId === activeEntreprise.id);
+    });
+  }, [risks, activeTenantId, activeEntreprise]);
 
-  const activeTenantActions = actions.filter(a => {
-    if (activeTenantId === 'tenant1') return !a.tenantId || a.tenantId === 'tenant1';
-    return !a.tenantId || a.tenantId === activeTenantId || a.tenantId === activeEntreprise?.id || activeTenantRisks.some(r => r.id === a.riskId);
-  });
+  const activeTenantActions = useMemo(() => {
+    return actions.filter(a => {
+      if (activeTenantId === 'tenant1') return !a.tenantId || a.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return a.tenantId === 'tenant2';
+      return a.tenantId === activeTenantId || (activeEntreprise?.id && a.tenantId === activeEntreprise.id);
+    });
+  }, [actions, activeTenantId, activeEntreprise]);
+
+  const activeTenantMissions = useMemo(() => {
+    return auditMissions.filter(m => {
+      if (activeTenantId === 'tenant1') return !m.tenantId || m.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return m.tenantId === 'tenant2';
+      return m.tenantId === activeTenantId || (activeEntreprise?.id && m.tenantId === activeEntreprise.id);
+    });
+  }, [auditMissions, activeTenantId, activeEntreprise]);
+
+  const activeTenantFindings = useMemo(() => {
+    const missionIds = new Set(activeTenantMissions.map(m => m.id));
+    return auditFindings.filter(f => {
+      if (f.missionId && missionIds.has(f.missionId)) return true;
+      if (activeTenantId === 'tenant1') return !f.tenantId || f.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return f.tenantId === 'tenant2';
+      return f.tenantId === activeTenantId || (activeEntreprise?.id && f.tenantId === activeEntreprise.id);
+    });
+  }, [auditFindings, activeTenantMissions, activeTenantId, activeEntreprise]);
+
+  const activeTenantFrameworks = useMemo(() => {
+    return complianceFrameworks.filter(fw => {
+      if (activeTenantId === 'tenant1') return !fw.tenantId || fw.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return fw.tenantId === 'tenant2';
+      return fw.tenantId === activeTenantId || (activeEntreprise?.id && fw.tenantId === activeEntreprise.id);
+    });
+  }, [complianceFrameworks, activeTenantId, activeEntreprise]);
+
+  const activeTenantObligations = useMemo(() => {
+    const fwIds = new Set(activeTenantFrameworks.map(fw => fw.id));
+    return complianceObligations.filter(o => {
+      if (o.frameworkId && fwIds.has(o.frameworkId)) return true;
+      if (activeTenantId === 'tenant1') return !o.tenantId || o.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return o.tenantId === 'tenant2';
+      return o.tenantId === activeTenantId || (activeEntreprise?.id && o.tenantId === activeEntreprise.id);
+    });
+  }, [complianceObligations, activeTenantFrameworks, activeTenantId, activeEntreprise]);
+
+  const activeTenantIncidents = useMemo(() => {
+    return complianceIncidents.filter(i => {
+      if (activeTenantId === 'tenant1') return !i.tenantId || i.tenantId === 'tenant1';
+      if (activeTenantId === 'tenant2') return i.tenantId === 'tenant2';
+      return i.tenantId === activeTenantId || (activeEntreprise?.id && i.tenantId === activeEntreprise.id);
+    });
+  }, [complianceIncidents, activeTenantId, activeEntreprise]);
 
   const activeTenantUsers = useMemo(() => {
     return users.filter(u => {
@@ -719,7 +784,11 @@ export default function App() {
                 isSuperAdminMode={isSuperAdminMode}
                 onAddRisk={handleAddRisk}
                 onUpdateRisk={(updated) => setRisks(prev => prev.map(r => r.id === updated.id ? { ...updated, tenantId: updated.tenantId || r.tenantId || activeTenantId } : r))}
-                onDeleteRisk={(id) => setRisks(prev => prev.filter(r => r.id !== id))}
+                onDeleteRisk={(id) => {
+                  const client = getSupabaseClient();
+                  deleteRowFromSupabase(client, 'risks', id);
+                  setRisks(prev => prev.filter(r => r.id !== id));
+                }}
                 onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
                 onAddLog={addAuditLog}
               />
@@ -784,13 +853,13 @@ export default function App() {
 
             {activeModule === 'audit' && (
               <AuditModule 
-                missions={auditMissions}
-                findings={auditFindings}
+                missions={activeTenantMissions}
+                findings={activeTenantFindings}
                 fonctions={fonctions}
                 users={activeTenantUsers}
                 currentUser={currentUser}
-                onAddMission={(newM) => setAuditMissions(prev => [...prev, { ...newM, id: `m_${Date.now()}` }])}
-                onAddFinding={(newF) => setAuditFindings(prev => [...prev, { ...newF, id: `f_${Date.now()}` }])}
+                onAddMission={(newM) => setAuditMissions(prev => [...prev, { ...newM, id: `m_${Date.now()}`, tenantId: activeTenantId }])}
+                onAddFinding={(newF) => setAuditFindings(prev => [...prev, { ...newF, id: `f_${Date.now()}`, tenantId: activeTenantId }])}
                 onUpdateFindingStatus={(id, status) => setAuditFindings(prev => prev.map(f => f.id === id ? { ...f, statut: status } : f))}
                 onAddLog={addAuditLog}
               />
@@ -798,14 +867,14 @@ export default function App() {
 
             {activeModule === 'compliance' && (
               <ComplianceModule 
-                frameworks={complianceFrameworks}
-                obligations={complianceObligations}
-                incidents={complianceIncidents}
+                frameworks={activeTenantFrameworks}
+                obligations={activeTenantObligations}
+                incidents={activeTenantIncidents}
                 fonctions={fonctions}
-                onAddFramework={(fw) => setComplianceFrameworks(prev => [...prev, { ...fw, id: `cf_${Date.now()}` }])}
-                onAddObligation={(ob) => setComplianceObligations(prev => [...prev, { ...ob, id: `co_${Date.now()}` }])}
+                onAddFramework={(fw) => setComplianceFrameworks(prev => [...prev, { ...fw, id: `cf_${Date.now()}`, tenantId: activeTenantId }])}
+                onAddObligation={(ob) => setComplianceObligations(prev => [...prev, { ...ob, id: `co_${Date.now()}`, tenantId: activeTenantId }])}
                 onUpdateObligationStatus={(id, status) => setComplianceObligations(prev => prev.map(o => o.id === id ? { ...o, statut: status } : o))}
-                onAddIncident={(inc) => setComplianceIncidents(prev => [...prev, { ...inc, id: `inc_${Date.now()}` }])}
+                onAddIncident={(inc) => setComplianceIncidents(prev => [...prev, { ...inc, id: `inc_${Date.now()}`, tenantId: activeTenantId }])}
                 onUpdateIncidentStatus={(id, status) => setComplianceIncidents(prev => prev.map(i => i.id === id ? { ...i, statutDeclaration: status } : i))}
                 onAddLog={addAuditLog}
               />
@@ -815,7 +884,11 @@ export default function App() {
               <AdminModule 
                 users={activeTenantUsers}
                 onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}`, tenantId: u.tenantId || activeTenantId }])}
-                onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
+                onDeleteUser={(id) => {
+                  const client = getSupabaseClient();
+                  deleteRowFromSupabase(client, 'users', id);
+                  setUsers(prev => prev.filter(u => u.id !== id));
+                }}
                 onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? { ...u, tenantId: u.tenantId || item.tenantId || activeTenantId } : item))}
                 tenants={tenants}
                 onAddTenant={(name) => setTenants(prev => [...prev, { ...SOGESTI_CONFIG, id: `tenant_${Date.now()}`, companyName: name }])}
