@@ -806,6 +806,62 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
     }
   };
 
+  const [exportingChartId, setExportingChartId] = useState<string | null>(null);
+
+  const handleExportChartPNG = async (chartId: string, chartTitle: string) => {
+    setExportingChartId(chartId);
+    try {
+      const { toPng } = await import('html-to-image');
+      await new Promise(resolve => setTimeout(resolve, 150));
+      const element = document.getElementById(chartId);
+      if (!element) {
+        alert("Graphique introuvable pour l'exportation.");
+        setExportingChartId(null);
+        return;
+      }
+
+      const dataUrl = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        filter: (node: HTMLElement) => {
+          if (node.classList && node.classList.contains('pdf-hide-action')) {
+            return false;
+          }
+          return true;
+        }
+      });
+
+      const sanitizedTitle = chartTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const link = document.createElement('a');
+      link.download = `GRC_Graphe_${sanitizedTitle}_${dateStr}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      onAddLog('Export PNG Graphique', `Exportation de l'image du graphique "${chartTitle}" au format PNG.`);
+    } catch (err) {
+      console.error("Erreur d'exportation PNG du graphique :", err);
+      alert("Une erreur est survenue lors de l'exportation du graphique en PNG.");
+    } finally {
+      setExportingChartId(null);
+    }
+  };
+
+  const renderExportPNGButton = (chartId: string, chartTitle: string) => (
+    <button
+      onClick={() => handleExportChartPNG(chartId, chartTitle)}
+      disabled={exportingChartId === chartId}
+      className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-700 border border-slate-250 rounded-lg font-extrabold text-[10.5px] transition-all flex items-center gap-1.5 shadow-2xs pdf-hide-action cursor-pointer disabled:opacity-50 shrink-0"
+      title="Exporter ce graphique au format image PNG Haute Définition"
+    >
+      <Download className={`w-3.5 h-3.5 ${exportingChartId === chartId ? 'animate-bounce text-indigo-400' : 'text-indigo-600 group-hover:text-white'}`} />
+      <span>{exportingChartId === chartId ? 'Export...' : 'Exporter PNG'}</span>
+    </button>
+  );
+
   return (
     <div className="flex-1 p-6 bg-slate-50 overflow-y-auto space-y-6 text-slate-800 text-xs" id="dashboard-module-container">
       
@@ -1558,16 +1614,19 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
         
         {/* Chart 1: Risques par Unité (Pie/Donut + Histogramme en Barres) */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+        <div id="chart-unit-distribution" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <PieChart className="w-4 h-4 text-indigo-600" />
                 Risques par Unité (Histogramme & Donut)
               </h3>
-              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
-                {entityBreakdown.length} Unité(s)
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                  {entityBreakdown.length} Unité(s)
+                </span>
+                {renderExportPNGButton('chart-unit-distribution', 'Risques_Par_Unite_Donut')}
+              </div>
             </div>
             <p className="text-[10.5px] text-slate-400">
               Répartition en nombre et pourcentage de l'exposition par entité organisationnelle.
@@ -1680,7 +1739,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
         </div>
 
         {/* Featured Excel Combo Chart: Risques par entité du Programme (Grouped Bars + Line % on Dual Y-Axes) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2 animate-fade-in">
+        <div id="chart-excel-combo" className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
             <div>
               <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
@@ -1691,9 +1750,12 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                 Histogramme combiné : Niveaux de criticité, Volume total (Cyan) & Proportion relative (Courbe Orange - Axe droit %).
               </p>
             </div>
-            <span className="self-start sm:self-center font-mono text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full shrink-0 shadow-2xs">
-              Double Axe Y (Volumes & %)
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-mono text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full shadow-2xs">
+                Double Axe Y (Volumes & %)
+              </span>
+              {renderExportPNGButton('chart-excel-combo', 'Risques_Entites_Programme_Combo')}
+            </div>
           </div>
 
           {unitCriticalityBreakdown.length === 0 ? (
@@ -1701,7 +1763,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
               Aucune donnée d'entité disponible pour l'analyse croisée.
             </div>
           ) : (
-            <div className="space-y-4 my-2">
+            <div className="space-y-4 my-1">
               {/* Dual Y-Axes Chart Area */}
               <div className="bg-slate-50/90 p-4 rounded-xl border border-slate-200 relative overflow-hidden">
                 {/* SVG Container for the Orange Line Graph (Risques %) */}
@@ -1718,9 +1780,8 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                   // Calculate point coordinates for the line chart (percentage overlay)
                   const numEntities = dataWithPct.length;
                   const points = dataWithPct.map((u, idx) => {
-                    // Left offset padding ~ 44px, right offset padding ~ 52px
                     const xPct = numEntities === 1 ? 50 : 5 + (idx + 0.5) * (90 / numEntities);
-                    const yPct = 100 - (u.pct / Math.max(maxPctVal, 1)) * 80 - 10; // 10% bottom margin, max 90% top
+                    const yPct = 100 - (u.pct / Math.max(maxPctVal, 1)) * 80 - 10;
                     return { ...u, xPct, yPct };
                   });
 
@@ -1903,17 +1964,165 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </div>
         </div>
 
-        {/* Chart 2: Profil de Criticité par Unité (Axe X: Unités / Axe Y: Graduation & Seuils de Criticité) */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
-          <div className="space-y-1">
+        {/* Dedicated Chart: Diagramme en Barres - Unités & Seuils de Criticité avec Effectifs, Pourcentages (%) et Légende */}
+        <div id="chart-unit-criticality-breakdown" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                Diagramme en Barres : Unités & Seuils de Criticité
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Histogramme en barres horizontales cumulées par unité : Effectif (N) & Pourcentage (%) inscrits sur chaque segment.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-mono text-xs font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">
+                Pourcentages (%) & Effectifs
+              </span>
+              {renderExportPNGButton('chart-unit-criticality-breakdown', 'Diagramme_Unites_Seuils_Criticite')}
+            </div>
+          </div>
+
+          {/* Explicit Legend for Criticality Thresholds */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-[11px]">
             <div className="flex items-center justify-between">
+              <span className="font-extrabold text-slate-800 uppercase tracking-wide text-[10.5px] flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-indigo-600" />
+                Légende Officielle des Seuils de Criticité :
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 font-mono">
+                Total Sélection : {filteredRisks.length} Risques
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {(tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0 
+                ? tenantConfig.matrixThresholds 
+                : generateDefaultThresholds(size, 4)
+              ).map((t, idx) => {
+                const globalCount = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label).length;
+                const globalPct = filteredRisks.length > 0 ? Math.round((globalCount / filteredRisks.length) * 100) : 0;
+                const colorStyle = getThresholdColorStyles(t.label, tenantConfig.matrixThresholds);
+
+                return (
+                  <div 
+                    key={idx}
+                    className="p-2 rounded-lg border flex items-center justify-between shadow-2xs transition-transform hover:scale-[1.01]"
+                    style={{ backgroundColor: colorStyle.bg, borderColor: colorStyle.border }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-3 h-3 rounded-full shrink-0 shadow-2xs border border-black/10" style={{ backgroundColor: colorStyle.text }}></span>
+                      <span className="font-extrabold truncate text-[11px]" style={{ color: colorStyle.text }}>
+                        {t.label}
+                      </span>
+                    </div>
+                    <span className="font-black font-mono text-[10.5px] px-1.5 py-0.5 rounded bg-white/90 border border-black/10 shrink-0 ml-1 text-slate-900 shadow-2xs">
+                      {globalCount} ({globalPct}%)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Unit x Criticality Bar Chart */}
+          {unitCriticalityBreakdown.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucune donnée d'unité disponible.
+            </div>
+          ) : (
+            <div className="space-y-3.5 my-1 max-h-96 overflow-y-auto pr-1">
+              {unitCriticalityBreakdown.map(u => {
+                const uTotal = u.total || 1;
+                return (
+                  <div key={u.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5 hover:border-indigo-300 transition-all shadow-2xs">
+                    {/* Unit Header */}
+                    <div className="flex justify-between items-center text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="font-mono font-black text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[10.5px]">
+                          {u.code}
+                        </span>
+                        <span className="font-extrabold text-slate-900 text-xs">{u.name}</span>
+                      </div>
+                      <span className="font-mono text-[11px] font-black text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full shadow-2xs">
+                        Total Unité : {u.total} risque(s) (100%)
+                      </span>
+                    </div>
+
+                    {/* Stacked Horizontal Bar with Inscribed Count AND Percentage */}
+                    <div className="w-full bg-slate-200 h-7 rounded-lg overflow-hidden flex shadow-2xs border border-slate-300/80">
+                      {u.levelCounts.map((level, idx) => {
+                        if (level.count === 0) return null;
+                        const segPct = Math.round((level.count / uTotal) * 100);
+                        const colorStyle = getThresholdColorStyles(level.label, tenantConfig.matrixThresholds);
+                        const barBg = colorStyle.text || level.color || '#4F46E5';
+
+                        return (
+                          <div
+                            key={idx}
+                            style={{ width: `${segPct}%`, backgroundColor: barBg }}
+                            className="h-full flex items-center justify-center transition-all duration-300 relative group cursor-pointer hover:brightness-110"
+                            title={`${u.name} - ${level.label}: ${level.count} risque(s) (${segPct}%)`}
+                          >
+                            <span className="font-mono font-black text-[10.5px] text-white drop-shadow-xs px-1 truncate">
+                              {segPct >= 8 ? `${level.count} (${segPct}%)` : level.count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sub-badges per Criticality Threshold */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5 text-[10px]">
+                      {u.levelCounts.map((level, idx) => {
+                        if (level.count === 0) return null;
+                        const segPct = Math.round((level.count / uTotal) * 100);
+                        const colorStyle = getThresholdColorStyles(level.label, tenantConfig.matrixThresholds);
+
+                        return (
+                          <span 
+                            key={idx} 
+                            className="px-2.5 py-0.5 rounded-md font-extrabold border flex items-center gap-1.5 shadow-2xs"
+                            style={{ 
+                              backgroundColor: colorStyle.bg, 
+                              color: colorStyle.text, 
+                              borderColor: colorStyle.border 
+                            }}
+                          >
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colorStyle.text }}></span>
+                            {level.label} : <strong className="font-black font-mono text-slate-900">{level.count}</strong> ({segPct}%)
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Graphique Croisé : Unités x Seuils de Criticité</span>
+            <span className="font-semibold text-slate-500">Pourcentages (%) & Effectifs Inscrits</span>
+          </div>
+        </div>
+
+        {/* Chart 4: Profil de Criticité par Unité (Axe X: Unités / Axe Y: Graduation & Seuils de Criticité) */}
+        <div id="chart-unit-criticality-profile" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" />
                 Profil de Criticité par Unité
               </h3>
-              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
-                Axe X: Unités | Axe Y: Graduation Criticité
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                  Axe X: Unités | Axe Y: Graduation
+                </span>
+                {renderExportPNGButton('chart-unit-criticality-profile', 'Profil_Criticite_Par_Unite')}
+              </div>
             </div>
             <p className="text-[10.5px] text-slate-400">
               Histogramme vertical : Graduation en ordonnée (Y), Unités en abscisse (X) et nombre inscrit sur chaque barre.
@@ -2017,17 +2226,20 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </div>
         </div>
 
-        {/* Chart 3: Efficacité des Contrôles par Catégorie (Histogramme en Barres) */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+        {/* Chart 5: Efficacité des Contrôles par Catégorie (Histogramme en Barres) */}
+        <div id="chart-control-efficacy" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-600" />
                 Efficacité des Contrôles par Catégorie
               </h3>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                Atténuation Brut vs Net
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Atténuation Brut vs Net
+                </span>
+                {renderExportPNGButton('chart-control-efficacy', 'Efficacite_Controles_Categorie')}
+              </div>
             </div>
             <p className="text-[10.5px] text-slate-400">
               Barres comparatives : Score brut (Ambre) vs Score net résiduel (Émeraude) inscrit sur la barre.
@@ -2097,17 +2309,20 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </div>
         </div>
 
-        {/* Chart 4: Couverture & Plans d'Action par Niveau de Criticité */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+        {/* Chart 6: Couverture & Plans d'Action par Niveau de Criticité */}
+        <div id="chart-action-coverage" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
           <div className="space-y-1">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <CheckSquare className="w-4 h-4 text-indigo-600" />
                 Couverture des Plans d'Action par Niveau de Criticité
               </h3>
-              <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
-                Par Criticité
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                  Par Criticité
+                </span>
+                {renderExportPNGButton('chart-action-coverage', 'Couverture_Plans_Action_Criticite')}
+              </div>
             </div>
             <p className="text-[10.5px] text-slate-400">
               Barres empilées avec effectifs inscrits : Risques couverts (Vert) vs Orphelins sans action (Ambre/Rouge).
@@ -2186,17 +2401,20 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </div>
         </div>
 
-        {/* Chart 5: Répartition des Catégories de Risques par Unité (Diagramme en Barres avec Pourcentages, Légende & Nombres) */}
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
+        {/* Chart 7: Répartition des Catégories de Risques par Unité (Diagramme en Barres avec Pourcentages, Légende & Nombres) */}
+        <div id="chart-unit-categories" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2">
           <div className="space-y-1">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" />
                 Répartition des Catégories de Risques par Unité
               </h3>
-              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                Histogramme en Barres | Effectifs & Pourcentages (%)
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                  Histogramme en Barres | Effectifs & Pourcentages (%)
+                </span>
+                {renderExportPNGButton('chart-unit-categories', 'Repartition_Categories_Par_Unite')}
+              </div>
             </div>
             <p className="text-[10.5px] text-slate-400">
               Barres empilées par unité avec le nombre exact et le pourcentage (%) inscrits sur chaque segment de catégorie.
