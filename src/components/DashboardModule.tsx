@@ -2109,6 +2109,165 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </div>
         </div>
 
+        {/* Dedicated Chart: Diagramme en Barres Verticales - Unités & Seuils de Criticité (Cumulées) */}
+        <div id="chart-unit-criticality-vertical-stacked" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 md:col-span-2 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                Diagramme en Barres Verticales : Unités & Seuils de Criticité
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Histogramme à barres verticales cumulées par unité : Effectifs (N) & Pourcentages (%) inscrits sur chaque segment.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-mono text-xs font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">
+                Barres Verticales Cumulées (N & %)
+              </span>
+              {renderExportPNGButton('chart-unit-criticality-vertical-stacked', 'Diagramme_Barres_Verticales_Unites_Criticite')}
+            </div>
+          </div>
+
+          {/* Official Criticality Threshold Legend */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-[11px]">
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold text-slate-800 uppercase tracking-wide text-[10.5px] flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-indigo-600" />
+                Légende Officielle des Seuils de Criticité :
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 font-mono">
+                Périmètre : {filteredRisks.length} Risques Identifiés
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {(tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0 
+                ? tenantConfig.matrixThresholds 
+                : generateDefaultThresholds(size, 4)
+              ).map((t, idx) => {
+                const globalCount = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label).length;
+                const globalPct = filteredRisks.length > 0 ? Math.round((globalCount / filteredRisks.length) * 100) : 0;
+                const colorStyle = getThresholdColorStyles(t.label, tenantConfig.matrixThresholds);
+
+                return (
+                  <div 
+                    key={idx}
+                    className="p-2 rounded-lg border flex items-center justify-between shadow-2xs transition-transform hover:scale-[1.01]"
+                    style={{ backgroundColor: colorStyle.bg, borderColor: colorStyle.border }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs border border-black/10" style={{ backgroundColor: colorStyle.text }}></span>
+                      <span className="font-extrabold truncate text-[11px]" style={{ color: colorStyle.text }}>
+                        {t.label}
+                      </span>
+                    </div>
+                    <span className="font-black font-mono text-[10.5px] px-1.5 py-0.5 rounded bg-white/90 border border-black/10 shrink-0 ml-1 text-slate-900 shadow-2xs">
+                      {globalCount} ({globalPct}%)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Vertical Stacked Bar Chart Area */}
+          {unitCriticalityBreakdown.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 italic text-xs">
+              Aucune donnée d'unité disponible pour l'histogramme vertical.
+            </div>
+          ) : (
+            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 my-1 overflow-x-auto">
+              <div className="min-w-[600px] space-y-2">
+                {/* Y-Axis Label and Stacked Vertical Bars */}
+                <div className="flex items-end gap-3 sm:gap-6 h-64 pt-6 pb-2 border-b border-slate-300 relative px-2">
+                  {/* Y-Axis Background Grid Lines */}
+                  <div className="absolute inset-x-0 top-0 h-full flex flex-col justify-between pointer-events-none text-[9px] font-mono font-bold text-slate-300 z-0">
+                    <div className="border-b border-dashed border-slate-250 w-full flex justify-between items-center pr-1">
+                      <span>100%</span>
+                    </div>
+                    <div className="border-b border-dashed border-slate-200 w-full flex justify-between items-center pr-1">
+                      <span>75%</span>
+                    </div>
+                    <div className="border-b border-dashed border-slate-200 w-full flex justify-between items-center pr-1">
+                      <span>50%</span>
+                    </div>
+                    <div className="border-b border-dashed border-slate-200 w-full flex justify-between items-center pr-1">
+                      <span>25%</span>
+                    </div>
+                    <div className="border-b border-slate-300 w-full flex justify-between items-center pr-1">
+                      <span>0%</span>
+                    </div>
+                  </div>
+
+                  {/* Vertical Column per Unit */}
+                  {unitCriticalityBreakdown.map((u) => {
+                    const uTotal = u.total || 1;
+                    return (
+                      <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end z-10 group relative min-w-0">
+                        {/* Hover Tooltip */}
+                        <div className="absolute -top-12 hidden group-hover:flex flex-col items-center z-30 pointer-events-none">
+                          <div className="bg-slate-900 text-white text-[10px] py-1 px-2.5 rounded shadow-lg whitespace-nowrap font-semibold">
+                            <strong>{u.name}</strong> : {u.total} risque(s) (100%)
+                          </div>
+                          <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1"></div>
+                        </div>
+
+                        {/* Total Count Badge on Top of Column */}
+                        <span className="font-mono text-[10px] font-black text-indigo-900 bg-white border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs mb-1.5 z-20">
+                          {u.total} (100%)
+                        </span>
+
+                        {/* Stacked Bar Body */}
+                        <div className="w-full max-w-[56px] h-full bg-slate-200/60 rounded-t-lg overflow-hidden flex flex-col justify-end shadow-xs border border-slate-300/80">
+                          {u.levelCounts.slice().reverse().map((level, idx) => {
+                            if (level.count === 0) return null;
+                            const segPct = Math.round((level.count / uTotal) * 100);
+                            const colorStyle = getThresholdColorStyles(level.label, tenantConfig.matrixThresholds);
+                            const barBg = colorStyle.text || level.color || '#4F46E5';
+
+                            return (
+                              <div
+                                key={idx}
+                                style={{ height: `${segPct}%`, backgroundColor: barBg }}
+                                className="w-full flex items-center justify-center transition-all duration-300 group/seg relative cursor-pointer hover:brightness-110"
+                                title={`${u.name} — ${level.label}: ${level.count} (${segPct}%)`}
+                              >
+                                <span className="font-mono font-black text-[9.5px] text-white drop-shadow-xs px-0.5 text-center leading-none truncate">
+                                  {segPct >= 10 ? `${level.count} (${segPct}%)` : (segPct >= 5 ? `${level.count}` : '')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* X-Axis Labels (Units) */}
+                <div className="flex justify-between gap-3 sm:gap-6 px-2 text-[10.5px]">
+                  {unitCriticalityBreakdown.map((u) => (
+                    <div key={u.id} className="flex-1 text-center min-w-0">
+                      <span className="font-mono font-black text-indigo-900 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px] inline-block truncate max-w-full">
+                        {u.code}
+                      </span>
+                      <p className="font-extrabold text-slate-800 text-[10px] truncate mt-0.5" title={u.name}>
+                        {u.name}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>Visualisation par Histogramme Vertical Cumulé (Business Intelligence / GRC)</span>
+            <span className="font-semibold text-slate-500">Axe X: Unités / Entités | Axe Y: Proportion (%) & Effectif (N)</span>
+          </div>
+        </div>
+
         {/* Chart 4: Profil de Criticité par Unité (Axe X: Unités / Axe Y: Graduation & Seuils de Criticité) */}
         <div id="chart-unit-criticality-profile" className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
           <div className="space-y-1">
