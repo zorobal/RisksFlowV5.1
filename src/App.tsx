@@ -208,6 +208,38 @@ export default function App() {
     return merged;
   };
 
+  const mergeArraysWithLocal = <T extends { id: string | number; tenantId?: string }>(
+    dbArray: T[] | undefined,
+    localArray: T[] | undefined
+  ): T[] => {
+    if (!localArray || localArray.length === 0) return dbArray || [];
+    if (!dbArray || dbArray.length === 0) return localArray;
+
+    const dbMap = new Map<string, T>(dbArray.map(item => [String(item.id), item]));
+    const localMap = new Map<string, T>(localArray.map(item => [String(item.id), item]));
+    const merged: T[] = [];
+
+    const allIds = new Set([...localMap.keys(), ...dbMap.keys()]);
+    for (const id of allIds) {
+      const localItem = localMap.get(id);
+      const dbItem = dbMap.get(id);
+
+      if (localItem && !dbItem) {
+        merged.push(localItem);
+      } else if (dbItem && !localItem) {
+        merged.push(dbItem);
+      } else if (localItem && dbItem) {
+        merged.push({
+          ...localItem,
+          ...dbItem,
+          tenantId: dbItem.tenantId || localItem.tenantId
+        });
+      }
+    }
+
+    return merged;
+  };
+
   const mergeSessionsWithLocal = (dbSessions: SessionExercice[], localSessions: SessionExercice[]): SessionExercice[] => {
     if (!localSessions || localSessions.length === 0) return dbSessions;
     if (!dbSessions || dbSessions.length === 0) return localSessions;
@@ -275,8 +307,8 @@ export default function App() {
             const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG];
             setTenants(tenantsToSet);
 
-            if (d.users?.length) {
-              const mergedUsers = [...d.users];
+            if (d.users?.length || localDataset?.users?.length) {
+              const mergedUsers = mergeArraysWithLocal<User>(d.users || [], localDataset?.users || []);
               PRESET_USERS.forEach(pu => {
                 if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
                   mergedUsers.push(pu);
@@ -295,26 +327,50 @@ export default function App() {
             const sessionsToSet = finalSessions.length > 0 ? finalSessions : PRESET_SESSIONS;
             setSessions(sessionsToSet);
 
-            if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
-            if (d.fonctions?.length) setFonctions(d.fonctions);
-            if (d.affectations?.length) setAffectations(d.affectations);
-            if (d.rules?.length) setRules(d.rules);
+            const finalMissions = mergeArraysWithLocal(d.auditMissions || [], localDataset?.auditMissions || []);
+            setAuditMissions(finalMissions);
+
+            const finalFindings = mergeArraysWithLocal(d.auditFindings || [], localDataset?.auditFindings || []);
+            setAuditFindings(finalFindings);
+
+            const finalFrameworks = mergeArraysWithLocal(d.complianceFrameworks || [], localDataset?.complianceFrameworks || []);
+            setComplianceFrameworks(finalFrameworks);
+
+            const finalObligations = mergeArraysWithLocal(d.complianceObligations || [], localDataset?.complianceObligations || []);
+            setComplianceObligations(finalObligations);
+
+            const finalIncidents = mergeArraysWithLocal(d.complianceIncidents || [], localDataset?.complianceIncidents || []);
+            setComplianceIncidents(finalIncidents);
+
+            const finalEntreprises = mergeArraysWithLocal(d.entreprises || [], localDataset?.entreprises || []);
+            setEntreprises(finalEntreprises);
+
+            const finalLicences = mergeArraysWithLocal(d.licences || [], localDataset?.licences || []);
+            setLicences(finalLicences);
+
+            const finalHistLicences = mergeArraysWithLocal(d.historiqueLicences || [], localDataset?.historiqueLicences || []);
+            setHistoriqueLicences(finalHistLicences);
+
+            if (d.auditLogs?.length) setAuditLogs(mergeArraysWithLocal(d.auditLogs, localDataset?.auditLogs || []));
+            if (d.fonctions?.length) setFonctions(mergeArraysWithLocal(d.fonctions, localDataset?.fonctions || []));
+            if (d.affectations?.length) setAffectations(mergeArraysWithLocal(d.affectations, localDataset?.affectations || []));
+            if (d.rules?.length) setRules(mergeArraysWithLocal(d.rules, localDataset?.rules || []));
             if (d.accessProfiles?.length) setAccessProfiles(d.accessProfiles);
-            if (d.auditMissions?.length) setAuditMissions(d.auditMissions);
-            if (d.auditFindings?.length) setAuditFindings(d.auditFindings);
-            if (d.complianceFrameworks?.length) setComplianceFrameworks(d.complianceFrameworks);
-            if (d.complianceObligations?.length) setComplianceObligations(d.complianceObligations);
-            if (d.complianceIncidents?.length) setComplianceIncidents(d.complianceIncidents);
-            if (d.entreprises?.length) setEntreprises(d.entreprises);
-            if (d.licences?.length) setLicences(d.licences);
-            if (d.historiqueLicences?.length) setHistoriqueLicences(d.historiqueLicences);
 
             const mergedDataset = {
               ...d,
               tenants: tenantsToSet,
               risks: finalRisks,
               actions: finalActions,
-              sessions: sessionsToSet
+              sessions: sessionsToSet,
+              auditMissions: finalMissions,
+              auditFindings: finalFindings,
+              complianceFrameworks: finalFrameworks,
+              complianceObligations: finalObligations,
+              complianceIncidents: finalIncidents,
+              entreprises: finalEntreprises,
+              licences: finalLicences,
+              historiqueLicences: finalHistLicences
             };
 
             try {
@@ -495,29 +551,71 @@ export default function App() {
   const activeEntreprise = entreprises.find(e => e.id === activeTenantId) || entreprises.find(e => e.id === activeTenantConfig.id);
   const activeLicence = licences.find(l => l.entrepriseId === activeTenantId) || licences.find(l => l.entrepriseId === activeTenantConfig.id);
   
+  const allSelectableTenants = useMemo(() => {
+    const list: TenantConfig[] = [...tenants];
+    entreprises.forEach(ent => {
+      if (!list.some(t => t.id === ent.id)) {
+        list.push({
+          id: ent.id,
+          companyName: ent.nomComplet || ent.raisonSociale || 'Entreprise Cliente',
+          logoUrl: ent.logoUrl || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80',
+          matrixSize: 3,
+          scales: generateScalesForSize(3),
+          formula: {
+            id: 'f1',
+            name: 'Formule IFACI Standard',
+            expression: 'P * I * M',
+            variables: [
+              { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 3 },
+              { name: 'I', label: 'Impact', min: 1, max: 3 },
+              { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 3 }
+            ],
+            description: 'Calcul par produit de la fréquence et de l\'impact.'
+          },
+          matrixThresholds: generateDefaultThresholds(3, 4),
+          workflowSteps: [
+            { id: 'w_brouillon', name: '📊 Brouillon', color: 'bg-gray-100 text-gray-800', order: 1 },
+            { id: 'w_evaluation', name: '🔍 Évaluation en cours', color: 'bg-blue-100 text-blue-800', order: 2 },
+            { id: 'w_validation', name: '⏳ Validation Responsable', color: 'bg-amber-100 text-amber-800', order: 3 },
+            { id: 'w_approuve', name: '✅ Approuvé GRC', color: 'bg-green-100 text-green-800', order: 4 },
+          ],
+          categories: [
+            { id: 'cat_finance', name: 'Risques Financiers', color: '#3b82f6', description: 'Pertes de chiffre d\'affaires, fraudes.' },
+            { id: 'cat_operational', name: 'Risques Opérationnels', color: '#10b981', description: 'Pannes matérielles, logistique.' },
+            { id: 'cat_it', name: 'Risques SI & Cybersécurité', color: '#8b5cf6', description: 'Piratages, fuites de données.' },
+          ],
+          entities: [
+            { id: `e_${ent.id}_DG`, name: `Direction Générale (${ent.raisonSociale || ent.nomComplet})`, type: 'Direction' }
+          ]
+        });
+      }
+    });
+    return list;
+  }, [tenants, entreprises]);
+
   const activeTenantRisks = useMemo(() => {
     return risks.filter(r => {
       if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1' || !r.tenantId;
       if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2';
-      return r.tenantId === activeTenantId || (activeEntreprise?.id && r.tenantId === activeEntreprise.id);
+      return r.tenantId === activeTenantId || (activeEntreprise?.id && r.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && r.tenantId === activeTenantConfig.id);
     });
-  }, [risks, activeTenantId, activeEntreprise]);
+  }, [risks, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantActions = useMemo(() => {
     return actions.filter(a => {
       if (activeTenantId === 'tenant1') return !a.tenantId || a.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return a.tenantId === 'tenant2';
-      return a.tenantId === activeTenantId || (activeEntreprise?.id && a.tenantId === activeEntreprise.id);
+      return a.tenantId === activeTenantId || (activeEntreprise?.id && a.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && a.tenantId === activeTenantConfig.id);
     });
-  }, [actions, activeTenantId, activeEntreprise]);
+  }, [actions, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantMissions = useMemo(() => {
     return auditMissions.filter(m => {
       if (activeTenantId === 'tenant1') return !m.tenantId || m.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return m.tenantId === 'tenant2';
-      return m.tenantId === activeTenantId || (activeEntreprise?.id && m.tenantId === activeEntreprise.id);
+      return m.tenantId === activeTenantId || (activeEntreprise?.id && m.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && m.tenantId === activeTenantConfig.id);
     });
-  }, [auditMissions, activeTenantId, activeEntreprise]);
+  }, [auditMissions, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantFindings = useMemo(() => {
     const missionIds = new Set(activeTenantMissions.map(m => m.id));
@@ -525,17 +623,17 @@ export default function App() {
       if (f.missionId && missionIds.has(f.missionId)) return true;
       if (activeTenantId === 'tenant1') return !f.tenantId || f.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return f.tenantId === 'tenant2';
-      return f.tenantId === activeTenantId || (activeEntreprise?.id && f.tenantId === activeEntreprise.id);
+      return f.tenantId === activeTenantId || (activeEntreprise?.id && f.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && f.tenantId === activeTenantConfig.id);
     });
-  }, [auditFindings, activeTenantMissions, activeTenantId, activeEntreprise]);
+  }, [auditFindings, activeTenantMissions, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantFrameworks = useMemo(() => {
     return complianceFrameworks.filter(fw => {
       if (activeTenantId === 'tenant1') return !fw.tenantId || fw.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return fw.tenantId === 'tenant2';
-      return fw.tenantId === activeTenantId || (activeEntreprise?.id && fw.tenantId === activeEntreprise.id);
+      return fw.tenantId === activeTenantId || (activeEntreprise?.id && fw.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && fw.tenantId === activeTenantConfig.id);
     });
-  }, [complianceFrameworks, activeTenantId, activeEntreprise]);
+  }, [complianceFrameworks, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantObligations = useMemo(() => {
     const fwIds = new Set(activeTenantFrameworks.map(fw => fw.id));
@@ -543,27 +641,27 @@ export default function App() {
       if (o.frameworkId && fwIds.has(o.frameworkId)) return true;
       if (activeTenantId === 'tenant1') return !o.tenantId || o.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return o.tenantId === 'tenant2';
-      return o.tenantId === activeTenantId || (activeEntreprise?.id && o.tenantId === activeEntreprise.id);
+      return o.tenantId === activeTenantId || (activeEntreprise?.id && o.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && o.tenantId === activeTenantConfig.id);
     });
-  }, [complianceObligations, activeTenantFrameworks, activeTenantId, activeEntreprise]);
+  }, [complianceObligations, activeTenantFrameworks, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantIncidents = useMemo(() => {
     return complianceIncidents.filter(i => {
       if (activeTenantId === 'tenant1') return !i.tenantId || i.tenantId === 'tenant1';
       if (activeTenantId === 'tenant2') return i.tenantId === 'tenant2';
-      return i.tenantId === activeTenantId || (activeEntreprise?.id && i.tenantId === activeEntreprise.id);
+      return i.tenantId === activeTenantId || (activeEntreprise?.id && i.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && i.tenantId === activeTenantConfig.id);
     });
-  }, [complianceIncidents, activeTenantId, activeEntreprise]);
+  }, [complianceIncidents, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const activeTenantUsers = useMemo(() => {
     return users.filter(u => {
       if (u.role === 'SuperAdmin') return true;
       if (activeTenantId === 'tenant1') {
-        return !u.tenantId || u.tenantId === 'tenant1' || u.tenantId === activeEntreprise?.id;
+        return !u.tenantId || u.tenantId === 'tenant1' || u.tenantId === activeEntreprise?.id || u.tenantId === activeTenantConfig?.id;
       }
-      return u.tenantId === activeTenantId || u.tenantId === activeEntreprise?.id;
+      return u.tenantId === activeTenantId || u.tenantId === activeEntreprise?.id || u.tenantId === activeTenantConfig?.id;
     });
-  }, [users, activeTenantId, activeEntreprise]);
+  }, [users, activeTenantId, activeEntreprise, activeTenantConfig]);
 
   const addAuditLog = (action: string, details: string) => {
     const newLog: AuditLog = {
@@ -682,7 +780,7 @@ export default function App() {
       )}
 
       <OdooNavbar 
-        tenants={tenants}
+        tenants={allSelectableTenants}
         activeTenantId={activeTenantId}
         setActiveTenantId={setActiveTenantId}
         currentUser={currentUser}

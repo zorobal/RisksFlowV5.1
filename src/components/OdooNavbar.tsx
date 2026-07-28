@@ -295,18 +295,50 @@ export default function OdooNavbar({
           )}
 
           {/* Active Tenant Selector (Odoo Multi-company concept) */}
-          {!isSuperAdminMode && currentUser.role !== 'SuperAdmin' && (
-            <div className="relative">
-              <button
-                id="tenant-selector-btn"
-                disabled
-                className="flex items-center space-x-2 px-2.5 py-1 rounded text-xs font-semibold bg-slate-800 text-indigo-300 border border-slate-700 cursor-default select-none"
-              >
-                <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="max-w-[130px] truncate">{activeTenant.companyName}</span>
-              </button>
-            </div>
-          )}
+          <div className="relative">
+            <button
+              id="tenant-selector-btn"
+              onClick={() => setShowTenantMenu(!showTenantMenu)}
+              className="flex items-center space-x-2 px-2.5 py-1 rounded text-xs font-semibold bg-slate-800 text-indigo-300 border border-slate-700 hover:bg-slate-700 cursor-pointer transition-colors"
+              title="Changer l'entreprise/tenant actif"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="max-w-[140px] truncate">{activeTenant?.companyName || 'Sélectionner Entreprise'}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {showTenantMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowTenantMenu(false)}></div>
+                <div className="absolute right-0 mt-1.5 w-64 bg-slate-900 border border-slate-800 rounded shadow-2xl py-1.5 z-50 animate-fade-in text-xs">
+                  <div className="px-3 py-1 font-bold text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-800 mb-1">
+                    Sélectionner l'Entreprise / Tenant
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {tenants.map(t => {
+                      const isActive = t.id === activeTenantId;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setActiveTenantId(t.id);
+                            setShowTenantMenu(false);
+                            onAddLog('Changement Tenant', `Sélection du tenant : ${t.companyName}`);
+                          }}
+                          className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-800 transition-colors ${
+                            isActive ? 'bg-indigo-950/60 font-bold text-indigo-300' : 'text-slate-300'
+                          }`}
+                        >
+                          <span className="truncate">{t.companyName}</span>
+                          {isActive && <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Quick Alert Bell */}
           <div className="relative">

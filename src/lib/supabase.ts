@@ -523,6 +523,7 @@ const mapFonctionToDb = (f: any) => ({
   libelle: f.libelle,
   entity_id: f.entityId,
   habilitation_profile_id: f.habilitationProfileId,
+  tenant_id: f.tenantId || f.tenant_id || null,
 });
 
 const mapFonctionFromDb = (f: any) => ({
@@ -530,6 +531,7 @@ const mapFonctionFromDb = (f: any) => ({
   libelle: f.libelle,
   entityId: f.entity_id,
   habilitationProfileId: f.habilitation_profile_id,
+  tenantId: f.tenant_id || f.tenantId || undefined,
 });
 
 const mapAffectationToDb = (a: any) => ({
@@ -539,6 +541,7 @@ const mapAffectationToDb = (a: any) => ({
   date_debut: a.dateDebut,
   date_fin: a.dateFin || null,
   statut: a.statut,
+  tenant_id: a.tenantId || a.tenant_id || null,
 });
 
 const mapAffectationFromDb = (a: any) => ({
@@ -548,6 +551,7 @@ const mapAffectationFromDb = (a: any) => ({
   dateDebut: a.date_debut,
   dateFin: a.date_fin || undefined,
   statut: a.statut,
+  tenantId: a.tenant_id || a.tenantId || undefined,
 });
 
 const mapRuleToDb = (r: any) => ({
@@ -560,6 +564,7 @@ const mapRuleToDb = (r: any) => ({
   priorite: r.priorite,
   statut: r.statut,
   entity_id: r.entityId || null,
+  tenant_id: r.tenantId || r.tenant_id || null,
 });
 
 const mapRuleFromDb = (r: any) => ({
@@ -572,6 +577,7 @@ const mapRuleFromDb = (r: any) => ({
   priorite: r.priorite,
   statut: r.statut,
   entityId: r.entity_id || undefined,
+  tenantId: r.tenant_id || r.tenantId || undefined,
 });
 
 const mapAuditMissionToDb = (m: any) => ({
@@ -583,6 +589,7 @@ const mapAuditMissionToDb = (m: any) => ({
   date_debut: m.dateDebut,
   date_fin: m.dateFin,
   pilote_fonction_id: m.piloteFonctionId,
+  tenant_id: m.tenantId || m.tenant_id || null,
 });
 
 const mapAuditMissionFromDb = (m: any) => ({
@@ -594,6 +601,7 @@ const mapAuditMissionFromDb = (m: any) => ({
   dateDebut: m.date_debut,
   dateFin: m.date_fin,
   piloteFonctionId: m.pilote_fonction_id,
+  tenantId: m.tenant_id || m.tenantId || undefined,
 });
 
 const mapAuditFindingToDb = (f: any) => ({
@@ -605,6 +613,7 @@ const mapAuditFindingToDb = (f: any) => ({
   recommandation: f.recommandation,
   statut: f.statut,
   plan_remediation_id: f.planRemediationId || null,
+  tenant_id: f.tenantId || f.tenant_id || null,
 });
 
 const mapAuditFindingFromDb = (f: any) => ({
@@ -616,6 +625,23 @@ const mapAuditFindingFromDb = (f: any) => ({
   recommandation: f.recommandation,
   statut: f.statut,
   planRemediationId: f.plan_remediation_id || undefined,
+  tenantId: f.tenant_id || f.tenantId || undefined,
+});
+
+const mapComplianceFrameworkToDb = (fw: any) => ({
+  id: fw.id,
+  nom: fw.nom,
+  version: fw.version,
+  secteur: fw.secteur,
+  tenant_id: fw.tenantId || fw.tenant_id || null,
+});
+
+const mapComplianceFrameworkFromDb = (fw: any) => ({
+  id: fw.id,
+  nom: fw.nom,
+  version: fw.version,
+  secteur: fw.secteur,
+  tenantId: fw.tenant_id || fw.tenantId || undefined,
 });
 
 const mapComplianceObligationToDb = (o: any) => ({
@@ -626,6 +652,7 @@ const mapComplianceObligationToDb = (o: any) => ({
   statut: o.statut,
   responsable_fonction_id: o.responsableFonctionId,
   derniere_revue: o.derniereRevue,
+  tenant_id: o.tenantId || o.tenant_id || null,
 });
 
 const mapComplianceObligationFromDb = (o: any) => ({
@@ -636,6 +663,7 @@ const mapComplianceObligationFromDb = (o: any) => ({
   statut: o.statut,
   responsableFonctionId: o.responsable_fonction_id,
   derniereRevue: o.derniere_revue,
+  tenantId: o.tenant_id || o.tenantId || undefined,
 });
 
 const mapComplianceIncidentToDb = (i: any) => ({
@@ -893,7 +921,7 @@ export const pushAllToSupabase = async (
     await pushTable('access_profiles', data.accessProfiles, (x) => x); // Access profiles matches directly
     await pushTable('audit_missions', data.auditMissions, mapAuditMissionToDb);
     await pushTable('audit_findings', data.auditFindings, mapAuditFindingToDb);
-    await pushTable('compliance_frameworks', data.complianceFrameworks, (x) => x); // Matches directly
+    await pushTable('compliance_frameworks', data.complianceFrameworks, mapComplianceFrameworkToDb);
     await pushTable('compliance_obligations', data.complianceObligations, mapComplianceObligationToDb);
     await pushTable('compliance_incidents', data.complianceIncidents, mapComplianceIncidentToDb);
     await pushTable('entreprises', data.entreprises, mapEntrepriseToDb);
@@ -963,7 +991,7 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
       accessProfiles,
       auditMissions: auditMissionsRaw.map(mapAuditMissionFromDb),
       auditFindings: auditFindingsRaw.map(mapAuditFindingFromDb),
-      complianceFrameworks,
+      complianceFrameworks: complianceFrameworks.map(mapComplianceFrameworkFromDb),
       complianceObligations: complianceObligationsRaw.map(mapComplianceObligationFromDb),
       complianceIncidents: complianceIncidentsRaw.map(mapComplianceIncidentFromDb),
       entreprises: entreprisesRaw.map(mapEntrepriseFromDb),
