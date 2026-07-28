@@ -196,7 +196,7 @@ export const AEROTECH_CONFIG: TenantConfig = {
 
 // Preset Tenant 3 / Government Entity: MINISTERE DES FINANCES (MINFI)
 export const MINFI_CONFIG: TenantConfig = {
-  id: 'tenant_minfi',
+  id: 'tenant_1785014226876_esnl6sr',
   companyName: 'MINISTERE DES FINANCES (MINFI)',
   logoUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=80&fit=crop&q=80',
   matrixSize: 4,
@@ -384,7 +384,7 @@ export const MINFI_RISKS: Risk[] = [
     createdBy: 'Alain-Patrick Nkoumou',
     createdAt: '2026-03-10',
     statusId: 'w_approuve',
-    tenantId: 'tenant_minfi',
+    tenantId: 'tenant_1785014226876_esnl6sr',
     companyName: 'MINISTERE DES FINANCES (MINFI)',
     frequencyValue: 3,
     impactValue: 4,
@@ -407,7 +407,7 @@ export const MINFI_RISKS: Risk[] = [
     createdBy: 'Alain-Patrick Nkoumou',
     createdAt: '2026-04-01',
     statusId: 'w_approuve',
-    tenantId: 'tenant_minfi',
+    tenantId: 'tenant_1785014226876_esnl6sr',
     companyName: 'MINISTERE DES FINANCES (MINFI)',
     frequencyValue: 3,
     impactValue: 3,
@@ -429,7 +429,7 @@ export const MINFI_RISKS: Risk[] = [
     createdBy: 'Marie-Thérèse Atangana',
     createdAt: '2026-02-15',
     statusId: 'w_approuve',
-    tenantId: 'tenant_minfi',
+    tenantId: 'tenant_1785014226876_esnl6sr',
     companyName: 'MINISTERE DES FINANCES (MINFI)',
     frequencyValue: 2,
     impactValue: 4,
@@ -451,7 +451,7 @@ export const MINFI_RISKS: Risk[] = [
     createdBy: 'Jean-Pierre Ndzana',
     createdAt: '2026-05-12',
     statusId: 'w_validation',
-    tenantId: 'tenant_minfi',
+    tenantId: 'tenant_1785014226876_esnl6sr',
     companyName: 'MINISTERE DES FINANCES (MINFI)',
     frequencyValue: 4,
     impactValue: 3,
@@ -797,7 +797,7 @@ export const PRESET_ENTREPRISES: EntrepriseCliente[] = [
     depassementQuotaMode: 'blocage'
   },
   {
-    id: 'tenant_minfi',
+    id: 'tenant_1785014226876_esnl6sr',
     raisonSociale: 'MINISTERE DES FINANCES (MINFI)',
     nomComplet: 'Ministère des Finances du Cameroun',
     secteurActivite: 'Administration Publique & Finances',
@@ -878,7 +878,7 @@ export const PRESET_LICENCES: Licence[] = [
   },
   {
     id: 'lic5',
-    entrepriseId: 'tenant_minfi',
+    entrepriseId: 'tenant_1785014226876_esnl6sr',
     typeAbonnement: 'Annuel',
     nombreUtilisateursMax: 200,
     nombreUtilisateursActuel: 5,
