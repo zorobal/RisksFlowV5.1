@@ -529,7 +529,18 @@ export default function App() {
 
   // Configurations actives avec recherche et fallback dynamique
   const activeTenantConfig = React.useMemo(() => {
-    const found = tenants.find(t => t.id === activeTenantId);
+    // 1. Direct match by ID in tenants
+    let found = tenants.find(t => t.id === activeTenantId);
+    if (found) return found;
+
+    // 2. Flexible match by ID or company name in tenants (from Supabase/local)
+    const lowerActiveId = (activeTenantId || '').toLowerCase().trim();
+    found = tenants.find(t => {
+      const tId = (t.id || '').toLowerCase().trim();
+      const tName = (t.companyName || '').toLowerCase().trim();
+      return tId === lowerActiveId || tName === lowerActiveId ||
+        (lowerActiveId.length > 3 && (tId.includes(lowerActiveId) || tName.includes(lowerActiveId) || lowerActiveId.includes(tName)));
+    });
     if (found) return found;
 
     if (activeTenantId === 'tenant_minfi' || activeTenantId.toLowerCase().includes('minfi') || activeTenantId.toLowerCase().includes('finance')) {
