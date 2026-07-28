@@ -25,8 +25,11 @@ import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase } from './lib
 import { 
   SOGESTI_CONFIG, 
   AEROTECH_CONFIG, 
+  MINFI_CONFIG,
   SOGESTI_RISKS, 
   AEROTECH_RISKS, 
+  MINFI_RISKS,
+  ALL_PRESET_RISKS,
   PRESET_USERS, 
   PRESET_ACTIONS, 
   PRESET_AUDIT_LOGS,
@@ -304,7 +307,10 @@ export default function App() {
           if (res.success && res.data) {
             const d = res.data;
             const finalTenants = mergeTenantsWithLocal(d.tenants || [], localDataset?.tenants || []);
-            const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG];
+            const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG, MINFI_CONFIG];
+            if (!tenantsToSet.some(t => t.id === MINFI_CONFIG.id)) {
+              tenantsToSet.push(MINFI_CONFIG);
+            }
             setTenants(tenantsToSet);
 
             if (d.users?.length || localDataset?.users?.length) {
@@ -317,7 +323,14 @@ export default function App() {
               setUsers(mergedUsers);
             }
 
-            const finalRisks = mergeRisksWithLocal(d.risks || [], localDataset?.risks || []);
+            const mergedRisks = mergeRisksWithLocal(d.risks || [], localDataset?.risks || []);
+            const finalRisks = mergedRisks.length > 0 ? mergedRisks : [...ALL_PRESET_RISKS];
+            // Ensure MINFI risks are present
+            MINFI_RISKS.forEach(mr => {
+              if (!finalRisks.some(r => r.id === mr.id)) {
+                finalRisks.push(mr);
+              }
+            });
             setRisks(finalRisks);
 
             const finalActions = mergeActionsWithLocal(d.actions || [], localDataset?.actions || []);
@@ -342,10 +355,22 @@ export default function App() {
             const finalIncidents = mergeArraysWithLocal(d.complianceIncidents || [], localDataset?.complianceIncidents || []);
             setComplianceIncidents(finalIncidents);
 
-            const finalEntreprises = mergeArraysWithLocal(d.entreprises || [], localDataset?.entreprises || []);
+            const mergedEntreprises = mergeArraysWithLocal<EntrepriseCliente>(d.entreprises || [], localDataset?.entreprises || []);
+            const finalEntreprises = mergedEntreprises.length > 0 ? mergedEntreprises : [...PRESET_ENTREPRISES];
+            PRESET_ENTREPRISES.forEach(pe => {
+              if (!finalEntreprises.some(e => e.id === pe.id || e.raisonSociale === pe.raisonSociale)) {
+                finalEntreprises.push(pe);
+              }
+            });
             setEntreprises(finalEntreprises);
 
-            const finalLicences = mergeArraysWithLocal(d.licences || [], localDataset?.licences || []);
+            const mergedLicences = mergeArraysWithLocal<Licence>(d.licences || [], localDataset?.licences || []);
+            const finalLicences = mergedLicences.length > 0 ? mergedLicences : [...PRESET_LICENCES];
+            PRESET_LICENCES.forEach(pl => {
+              if (!finalLicences.some(l => l.id === pl.id || l.entrepriseId === pl.entrepriseId)) {
+                finalLicences.push(pl);
+              }
+            });
             setLicences(finalLicences);
 
             const finalHistLicences = mergeArraysWithLocal(d.historiqueLicences || [], localDataset?.historiqueLicences || []);
@@ -507,9 +532,22 @@ export default function App() {
     const found = tenants.find(t => t.id === activeTenantId);
     if (found) return found;
 
+    if (activeTenantId === 'tenant_minfi' || activeTenantId.toLowerCase().includes('minfi') || activeTenantId.toLowerCase().includes('finance')) {
+      return MINFI_CONFIG;
+    }
+
     // Check if an entreprise entry exists with this activeTenantId
-    const ent = entreprises.find(e => e.id === activeTenantId);
+    const ent = entreprises.find(e => 
+      e.id === activeTenantId || 
+      (e.raisonSociale && e.raisonSociale.toLowerCase().includes(activeTenantId.toLowerCase())) ||
+      (e.nomComplet && e.nomComplet.toLowerCase().includes(activeTenantId.toLowerCase()))
+    );
+
     if (ent) {
+      if (ent.id === 'tenant_minfi' || (ent.raisonSociale && ent.raisonSociale.toLowerCase().includes('finances'))) {
+        return MINFI_CONFIG;
+      }
+
       const fallbackConfig: TenantConfig = {
         id: ent.id,
         companyName: ent.nomComplet || ent.raisonSociale || 'Entreprise Cliente',
@@ -548,110 +586,146 @@ export default function App() {
 
     return tenants[0] || SOGESTI_CONFIG;
   }, [tenants, entreprises, activeTenantId]);
-  const activeEntreprise = entreprises.find(e => e.id === activeTenantId) || entreprises.find(e => e.id === activeTenantConfig.id);
+
+  const activeEntreprise = useMemo(() => {
+    return entreprises.find(e => 
+      e.id === activeTenantId || 
+      e.id === activeTenantConfig?.id ||
+      (e.raisonSociale && activeTenantConfig?.companyName && e.raisonSociale.toLowerCase().includes(activeTenantConfig.companyName.toLowerCase())) ||
+      (e.nomComplet && activeTenantConfig?.companyName && e.nomComplet.toLowerCase().includes(activeTenantConfig.companyName.toLowerCase())) ||
+      (e.raisonSociale && e.raisonSociale.toLowerCase().includes(activeTenantId.toLowerCase())) ||
+      (e.nomComplet && e.nomComplet.toLowerCase().includes(activeTenantId.toLowerCase()))
+    ) || PRESET_ENTREPRISES.find(e => e.id === activeTenantId) || entreprises[0];
+  }, [entreprises, activeTenantId, activeTenantConfig]);
+
   const activeLicence = licences.find(l => l.entrepriseId === activeTenantId) || licences.find(l => l.entrepriseId === activeTenantConfig.id);
-  
+
   const allSelectableTenants = useMemo(() => {
     const list: TenantConfig[] = [...tenants];
+    if (!list.some(t => t.id === MINFI_CONFIG.id)) {
+      list.push(MINFI_CONFIG);
+    }
     entreprises.forEach(ent => {
       if (!list.some(t => t.id === ent.id)) {
-        list.push({
-          id: ent.id,
-          companyName: ent.nomComplet || ent.raisonSociale || 'Entreprise Cliente',
-          logoUrl: ent.logoUrl || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80',
-          matrixSize: 3,
-          scales: generateScalesForSize(3),
-          formula: {
-            id: 'f1',
-            name: 'Formule IFACI Standard',
-            expression: 'P * I * M',
-            variables: [
-              { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 3 },
-              { name: 'I', label: 'Impact', min: 1, max: 3 },
-              { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 3 }
+        if (ent.id === 'tenant_minfi' || (ent.raisonSociale && ent.raisonSociale.toLowerCase().includes('finances'))) {
+          list.push(MINFI_CONFIG);
+        } else {
+          list.push({
+            id: ent.id,
+            companyName: ent.nomComplet || ent.raisonSociale || 'Entreprise Cliente',
+            logoUrl: ent.logoUrl || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80',
+            matrixSize: 3,
+            scales: generateScalesForSize(3),
+            formula: {
+              id: 'f1',
+              name: 'Formule IFACI Standard',
+              expression: 'P * I * M',
+              variables: [
+                { name: 'P', label: 'Probabilité/Fréquence', min: 1, max: 3 },
+                { name: 'I', label: 'Impact', min: 1, max: 3 },
+                { name: 'M', label: 'Maîtrise/Contrôle', min: 1, max: 3 }
+              ],
+              description: 'Calcul par produit de la fréquence et de l\'impact.'
+            },
+            matrixThresholds: generateDefaultThresholds(3, 4),
+            workflowSteps: [
+              { id: 'w_brouillon', name: '📊 Brouillon', color: 'bg-gray-100 text-gray-800', order: 1 },
+              { id: 'w_evaluation', name: '🔍 Évaluation en cours', color: 'bg-blue-100 text-blue-800', order: 2 },
+              { id: 'w_validation', name: '⏳ Validation Responsable', color: 'bg-amber-100 text-amber-800', order: 3 },
+              { id: 'w_approuve', name: '✅ Approuvé GRC', color: 'bg-green-100 text-green-800', order: 4 },
             ],
-            description: 'Calcul par produit de la fréquence et de l\'impact.'
-          },
-          matrixThresholds: generateDefaultThresholds(3, 4),
-          workflowSteps: [
-            { id: 'w_brouillon', name: '📊 Brouillon', color: 'bg-gray-100 text-gray-800', order: 1 },
-            { id: 'w_evaluation', name: '🔍 Évaluation en cours', color: 'bg-blue-100 text-blue-800', order: 2 },
-            { id: 'w_validation', name: '⏳ Validation Responsable', color: 'bg-amber-100 text-amber-800', order: 3 },
-            { id: 'w_approuve', name: '✅ Approuvé GRC', color: 'bg-green-100 text-green-800', order: 4 },
-          ],
-          categories: [
-            { id: 'cat_finance', name: 'Risques Financiers', color: '#3b82f6', description: 'Pertes de chiffre d\'affaires, fraudes.' },
-            { id: 'cat_operational', name: 'Risques Opérationnels', color: '#10b981', description: 'Pannes matérielles, logistique.' },
-            { id: 'cat_it', name: 'Risques SI & Cybersécurité', color: '#8b5cf6', description: 'Piratages, fuites de données.' },
-          ],
-          entities: [
-            { id: `e_${ent.id}_DG`, name: `Direction Générale (${ent.raisonSociale || ent.nomComplet})`, type: 'Direction' }
-          ]
-        });
+            categories: [
+              { id: 'cat_finance', name: 'Risques Financiers', color: '#3b82f6', description: 'Pertes de chiffre d\'affaires, fraudes.' },
+              { id: 'cat_operational', name: 'Risques Opérationnels', color: '#10b981', description: 'Pannes matérielles, logistique.' },
+              { id: 'cat_it', name: 'Risques SI & Cybersécurité', color: '#8b5cf6', description: 'Piratages, fuites de données.' },
+            ],
+            entities: [
+              { id: `e_${ent.id}_DG`, name: `Direction Générale (${ent.raisonSociale || ent.nomComplet})`, type: 'Direction' }
+            ]
+          });
+        }
       }
     });
     return list;
   }, [tenants, entreprises]);
 
+  // Unified tenant matching helper
+  const isTenantMatch = React.useCallback((itemTenantId?: string, itemCompanyName?: string, itemId?: string) => {
+    if (itemTenantId === activeTenantId) return true;
+    if (activeEntreprise?.id && itemTenantId === activeEntreprise.id) return true;
+    if (activeTenantConfig?.id && itemTenantId === activeTenantConfig.id) return true;
+
+    const activeNames = [
+      activeTenantId,
+      activeTenantConfig?.id,
+      activeTenantConfig?.companyName,
+      activeEntreprise?.id,
+      activeEntreprise?.raisonSociale,
+      activeEntreprise?.nomComplet
+    ].filter(Boolean).map(s => String(s).toLowerCase().trim());
+
+    if (itemTenantId) {
+      const tLower = itemTenantId.toLowerCase().trim();
+      if (activeNames.some(name => name === tLower || name.includes(tLower) || tLower.includes(name))) {
+        return true;
+      }
+    }
+
+    if (itemCompanyName) {
+      const cLower = itemCompanyName.toLowerCase().trim();
+      if (activeNames.some(name => name === cLower || name.includes(cLower) || cLower.includes(name))) {
+        return true;
+      }
+    }
+
+    if (activeTenantId === 'tenant1' && (!itemTenantId || itemTenantId === 'tenant1')) {
+      return true;
+    }
+
+    if (itemId) {
+      if (activeTenantId === 'tenant1' && (itemId.startsWith('R-1') || itemId.startsWith('a1'))) return true;
+      if (activeTenantId === 'tenant2' && (itemId.startsWith('R-2') || itemId.startsWith('a2'))) return true;
+      if ((activeTenantId === 'tenant_minfi' || activeTenantId === 'tenant5' || activeNames.some(n => n.includes('minfi') || n.includes('finance'))) && (itemId.startsWith('R-5') || itemId.startsWith('a5'))) return true;
+    }
+
+    return false;
+  }, [activeTenantId, activeEntreprise, activeTenantConfig]);
+
   const activeTenantRisks = useMemo(() => {
-    return risks.filter(r => {
-      if (activeTenantId === 'tenant1') return r.id.startsWith('R-1') || r.tenantId === 'tenant1' || !r.tenantId;
-      if (activeTenantId === 'tenant2') return r.id.startsWith('R-2') || r.tenantId === 'tenant2';
-      return r.tenantId === activeTenantId || (activeEntreprise?.id && r.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && r.tenantId === activeTenantConfig.id);
-    });
-  }, [risks, activeTenantId, activeEntreprise, activeTenantConfig]);
+    return risks.filter(r => isTenantMatch(r.tenantId, r.companyName, r.id));
+  }, [risks, isTenantMatch]);
 
   const activeTenantActions = useMemo(() => {
-    return actions.filter(a => {
-      if (activeTenantId === 'tenant1') return !a.tenantId || a.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return a.tenantId === 'tenant2';
-      return a.tenantId === activeTenantId || (activeEntreprise?.id && a.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && a.tenantId === activeTenantConfig.id);
-    });
-  }, [actions, activeTenantId, activeEntreprise, activeTenantConfig]);
+    return actions.filter(a => isTenantMatch(a.tenantId, undefined, a.id));
+  }, [actions, isTenantMatch]);
 
   const activeTenantMissions = useMemo(() => {
-    return auditMissions.filter(m => {
-      if (activeTenantId === 'tenant1') return !m.tenantId || m.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return m.tenantId === 'tenant2';
-      return m.tenantId === activeTenantId || (activeEntreprise?.id && m.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && m.tenantId === activeTenantConfig.id);
-    });
-  }, [auditMissions, activeTenantId, activeEntreprise, activeTenantConfig]);
+    return auditMissions.filter(m => isTenantMatch(m.tenantId, undefined, m.id));
+  }, [auditMissions, isTenantMatch]);
 
   const activeTenantFindings = useMemo(() => {
     const missionIds = new Set(activeTenantMissions.map(m => m.id));
     return auditFindings.filter(f => {
       if (f.missionId && missionIds.has(f.missionId)) return true;
-      if (activeTenantId === 'tenant1') return !f.tenantId || f.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return f.tenantId === 'tenant2';
-      return f.tenantId === activeTenantId || (activeEntreprise?.id && f.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && f.tenantId === activeTenantConfig.id);
+      return isTenantMatch(f.tenantId, undefined, f.id);
     });
-  }, [auditFindings, activeTenantMissions, activeTenantId, activeEntreprise, activeTenantConfig]);
+  }, [auditFindings, activeTenantMissions, isTenantMatch]);
 
   const activeTenantFrameworks = useMemo(() => {
-    return complianceFrameworks.filter(fw => {
-      if (activeTenantId === 'tenant1') return !fw.tenantId || fw.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return fw.tenantId === 'tenant2';
-      return fw.tenantId === activeTenantId || (activeEntreprise?.id && fw.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && fw.tenantId === activeTenantConfig.id);
-    });
-  }, [complianceFrameworks, activeTenantId, activeEntreprise, activeTenantConfig]);
+    return complianceFrameworks.filter(fw => isTenantMatch(fw.tenantId, undefined, fw.id));
+  }, [complianceFrameworks, isTenantMatch]);
 
   const activeTenantObligations = useMemo(() => {
     const fwIds = new Set(activeTenantFrameworks.map(fw => fw.id));
     return complianceObligations.filter(o => {
       if (o.frameworkId && fwIds.has(o.frameworkId)) return true;
-      if (activeTenantId === 'tenant1') return !o.tenantId || o.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return o.tenantId === 'tenant2';
-      return o.tenantId === activeTenantId || (activeEntreprise?.id && o.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && o.tenantId === activeTenantConfig.id);
+      return isTenantMatch(o.tenantId, undefined, o.id);
     });
-  }, [complianceObligations, activeTenantFrameworks, activeTenantId, activeEntreprise, activeTenantConfig]);
+  }, [complianceObligations, activeTenantFrameworks, isTenantMatch]);
 
   const activeTenantIncidents = useMemo(() => {
-    return complianceIncidents.filter(i => {
-      if (activeTenantId === 'tenant1') return !i.tenantId || i.tenantId === 'tenant1';
-      if (activeTenantId === 'tenant2') return i.tenantId === 'tenant2';
-      return i.tenantId === activeTenantId || (activeEntreprise?.id && i.tenantId === activeEntreprise.id) || (activeTenantConfig?.id && i.tenantId === activeTenantConfig.id);
-    });
-  }, [complianceIncidents, activeTenantId, activeEntreprise, activeTenantConfig]);
+    return complianceIncidents.filter(i => isTenantMatch(i.tenantId, undefined, i.id));
+  }, [complianceIncidents, isTenantMatch]);
 
   const activeTenantUsers = useMemo(() => {
     return users.filter(u => {

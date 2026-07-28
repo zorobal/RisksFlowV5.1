@@ -194,6 +194,31 @@ export const AEROTECH_CONFIG: TenantConfig = {
   ]
 };
 
+// Preset Tenant 3 / Government Entity: MINISTERE DES FINANCES (MINFI)
+export const MINFI_CONFIG: TenantConfig = {
+  id: 'tenant_minfi',
+  companyName: 'MINISTERE DES FINANCES (MINFI)',
+  logoUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=80&fit=crop&q=80',
+  matrixSize: 4,
+  scales: SOGESTI_CONFIG.scales,
+  formula: SOGESTI_CONFIG.formula,
+  matrixThresholds: SOGESTI_CONFIG.matrixThresholds,
+  workflowSteps: SOGESTI_CONFIG.workflowSteps,
+  categories: [
+    { id: 'cat_finance', name: 'Risques Financiers & Budgétaires', color: '#3b82f6', description: 'Pertes de recettes, fraudes fiscales, détournements.' },
+    { id: 'cat_operational', name: 'Risques Opérationnels & Services', color: '#10b981', description: 'Dysfonctionnement des services du Trésor, Impôts et Douanes.' },
+    { id: 'cat_it', name: 'Risques SI & Cybersécurité', color: '#8b5cf6', description: 'Piratages des applications SYDONIA / MESURE, pannes serveurs.' },
+    { id: 'cat_regulatory', name: 'Risques Réglementaires & Juridiques', color: '#f59e0b', description: 'Non-conformité aux directives CEMAC / RGCP.' },
+  ],
+  entities: [
+    { id: 'e_minfi_dg', name: 'Cabinet du Ministre (MINFI)', type: 'Direction Générale / Siège', code: 'CAB-MINFI' },
+    { id: 'e_minfi_tre', name: 'Direction Générale du Trésor (DGTCFM)', type: 'Direction', parentId: 'e_minfi_dg', code: 'DGT' },
+    { id: 'e_minfi_imp', name: 'Direction Générale des Impôts (DGI)', type: 'Direction', parentId: 'e_minfi_dg', code: 'DGI' },
+    { id: 'e_minfi_dou', name: 'Direction Générale des Douanes (DGD)', type: 'Direction', parentId: 'e_minfi_dg', code: 'DGD' },
+    { id: 'e_minfi_bud', name: 'Direction Générale du Budget (DGB)', type: 'Direction', parentId: 'e_minfi_dg', code: 'DGB' },
+  ]
+};
+
 // Default Risks for Tenant 1 (Sogesti)
 export const SOGESTI_RISKS: Risk[] = [
   {
@@ -344,6 +369,105 @@ export const AEROTECH_RISKS: Risk[] = [
       { date: '2026-05-18', user: 'Alain-Patrick Nkoumou', action: 'Ajout de la revue de bug réglementaire' }
     ]
   }
+];
+
+// Default Risks for Tenant MINISTERE DES FINANCES (MINFI)
+export const MINFI_RISKS: Risk[] = [
+  {
+    id: 'R-501',
+    title: 'Piratage et indisponibilité du système SYDONIA / MESURE de la DGD',
+    description: 'Attaque par déni de service (DDoS) ou intrusion malveillante entraînant un blocage des dédouanements et une perte de recettes fiscales aux portes d\'entrée du territoire.',
+    causes: 'Obsolescence partielle des serveurs d\'hébergement, vulnérabilités réseaux et absence d\'un centre de secours (DRP) opérationnel.',
+    consequences: 'Perte de recettes douanières estimée à plus de 500 millions FCFA/jour, engorgement des ports et mécontentement des opérateurs économiques.',
+    categoryId: 'cat_it',
+    entityId: 'e_minfi_dou',
+    createdBy: 'Alain-Patrick Nkoumou',
+    createdAt: '2026-03-10',
+    statusId: 'w_approuve',
+    tenantId: 'tenant_minfi',
+    companyName: 'MINISTERE DES FINANCES (MINFI)',
+    frequencyValue: 3,
+    impactValue: 4,
+    controlValue: 2,
+    scoreBrut: 12,
+    scoreResiduel: 24,
+    history: [
+      { date: '2026-03-10', user: 'Alain-Patrick Nkoumou', action: 'Création de la fiche de risque MINFI' },
+      { date: '2026-03-15', user: 'SuperAdmin Kouam', action: 'Validation de la cotation initiale' }
+    ]
+  },
+  {
+    id: 'R-502',
+    title: 'Non-conformité aux Directives de gestion des Finances Publiques CEMAC / RGCP',
+    description: 'Dépassement non autorisé de crédits budgétaires dans le calendrier d\'exécution de la dépense sans visa préalable de la DGB.',
+    causes: 'Manque d\'automatisation des contrôles de cohérence dans l\'application de gestion budgétaire et contournements manuels.',
+    consequences: 'Risque de rejet lors des contrôles de la Chambre des Comptes, sanctions disciplinaires financières et retards de paie.',
+    categoryId: 'cat_regulatory',
+    entityId: 'e_minfi_bud',
+    createdBy: 'Alain-Patrick Nkoumou',
+    createdAt: '2026-04-01',
+    statusId: 'w_approuve',
+    tenantId: 'tenant_minfi',
+    companyName: 'MINISTERE DES FINANCES (MINFI)',
+    frequencyValue: 3,
+    impactValue: 3,
+    controlValue: 3,
+    scoreBrut: 9,
+    scoreResiduel: 27,
+    history: [
+      { date: '2026-04-01', user: 'Alain-Patrick Nkoumou', action: 'Initiation et identification de l\'écart de conformité' }
+    ]
+  },
+  {
+    id: 'R-503',
+    title: 'Risque d\'usurpation d\'identité sur les ordres de virement du Trésor Public',
+    description: 'Tentative d\'injection de faux ordres de paiement vers des comptes bancaires fictifs par compromission de clés de signature électronique.',
+    causes: 'Stockage non sécurisé des tokens PKI de signature et absence de vérification croisée automatique.',
+    consequences: 'Détournement de deniers publics, préjudice réputationnel majeur et blocage des règlements fournisseurs.',
+    categoryId: 'cat_finance',
+    entityId: 'e_minfi_tre',
+    createdBy: 'Marie-Thérèse Atangana',
+    createdAt: '2026-02-15',
+    statusId: 'w_approuve',
+    tenantId: 'tenant_minfi',
+    companyName: 'MINISTERE DES FINANCES (MINFI)',
+    frequencyValue: 2,
+    impactValue: 4,
+    controlValue: 2,
+    scoreBrut: 8,
+    scoreResiduel: 16,
+    history: [
+      { date: '2026-02-15', user: 'Marie-Thérèse Atangana', action: 'Audit de la chaîne de paiement du Trésor' }
+    ]
+  },
+  {
+    id: 'R-504',
+    title: 'Rupture de liaison réseau sécurisée entre la DGI et les Centres de Impôts',
+    description: 'Interruption répétée des faisceaux télécoms rendant impossible la télé-déclaration et le télé-paiement des impôts par les entreprises.',
+    causes: 'Défaillance de la ligne principale en fibre optique et absence de basculement automatique sur liaison satellite/4G de secours.',
+    consequences: 'Pénalités de retard injustifiées pour les usagers, goulot d\'étranglement financier en fin de mois.',
+    categoryId: 'cat_operational',
+    entityId: 'e_minfi_imp',
+    createdBy: 'Jean-Pierre Ndzana',
+    createdAt: '2026-05-12',
+    statusId: 'w_validation',
+    tenantId: 'tenant_minfi',
+    companyName: 'MINISTERE DES FINANCES (MINFI)',
+    frequencyValue: 4,
+    impactValue: 3,
+    controlValue: 3,
+    scoreBrut: 12,
+    scoreResiduel: 36,
+    history: [
+      { date: '2026-05-12', user: 'Jean-Pierre Ndzana', action: 'Notification de la panne réseau récurrente' }
+    ]
+  }
+];
+
+export const ALL_PRESET_RISKS: Risk[] = [
+  ...SOGESTI_RISKS,
+  ...AEROTECH_RISKS,
+  ...MINFI_RISKS
 ];
 
 // Actions pre-loaded
@@ -671,6 +795,23 @@ export const PRESET_ENTREPRISES: EntrepriseCliente[] = [
     maxSuccursales: 10,
     succursalesActives: true,
     depassementQuotaMode: 'blocage'
+  },
+  {
+    id: 'tenant_minfi',
+    raisonSociale: 'MINISTERE DES FINANCES (MINFI)',
+    nomComplet: 'Ministère des Finances du Cameroun',
+    secteurActivite: 'Administration Publique & Finances',
+    dateCreationCompte: '2025-02-01',
+    statutCompte: 'Actif',
+    regionHebergement: 'Afrique Centrale (Yaoundé)',
+    idContactPrincipal: 'Alain-Patrick Nkoumou',
+    maxSuccursales: 10,
+    succursalesActives: true,
+    depassementQuotaMode: 'blocage',
+    pays: 'Cameroun',
+    ville: 'Yaoundé',
+    email: 'contact@minfi.gov.cm',
+    telephone: '+237 222 23 40 05'
   }
 ];
 
@@ -730,6 +871,21 @@ export const PRESET_LICENCES: Licence[] = [
     dateDebut: '2025-11-20',
     dateFin: '2026-11-19',
     statutLicence: 'Suspendue',
+    nombre_succursales_max: 10,
+    nombre_succursales_actuel: 0,
+    depassementQuotaMode: 'blocage',
+    succursalesActives: true
+  },
+  {
+    id: 'lic5',
+    entrepriseId: 'tenant_minfi',
+    typeAbonnement: 'Annuel',
+    nombreUtilisateursMax: 200,
+    nombreUtilisateursActuel: 5,
+    modulesActives: ['Cartographie', 'Plans d\'action', 'Audit', 'Conformité', 'Reporting', 'Serveur SMTP'],
+    dateDebut: '2026-01-01',
+    dateFin: '2027-12-31',
+    statutLicence: 'Active',
     nombre_succursales_max: 10,
     nombre_succursales_actuel: 0,
     depassementQuotaMode: 'blocage',
