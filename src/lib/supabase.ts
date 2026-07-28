@@ -523,7 +523,6 @@ const mapFonctionToDb = (f: any) => ({
   libelle: f.libelle,
   entity_id: f.entityId,
   habilitation_profile_id: f.habilitationProfileId,
-  tenant_id: f.tenantId || f.tenant_id || null,
 });
 
 const mapFonctionFromDb = (f: any) => ({
@@ -531,7 +530,6 @@ const mapFonctionFromDb = (f: any) => ({
   libelle: f.libelle,
   entityId: f.entity_id,
   habilitationProfileId: f.habilitation_profile_id,
-  tenantId: f.tenant_id || f.tenantId || undefined,
 });
 
 const mapAffectationToDb = (a: any) => ({
@@ -541,7 +539,6 @@ const mapAffectationToDb = (a: any) => ({
   date_debut: a.dateDebut,
   date_fin: a.dateFin || null,
   statut: a.statut,
-  tenant_id: a.tenantId || a.tenant_id || null,
 });
 
 const mapAffectationFromDb = (a: any) => ({
@@ -551,7 +548,6 @@ const mapAffectationFromDb = (a: any) => ({
   dateDebut: a.date_debut,
   dateFin: a.date_fin || undefined,
   statut: a.statut,
-  tenantId: a.tenant_id || a.tenantId || undefined,
 });
 
 const mapRuleToDb = (r: any) => ({
@@ -564,7 +560,6 @@ const mapRuleToDb = (r: any) => ({
   priorite: r.priorite,
   statut: r.statut,
   entity_id: r.entityId || null,
-  tenant_id: r.tenantId || r.tenant_id || null,
 });
 
 const mapRuleFromDb = (r: any) => ({
@@ -577,7 +572,6 @@ const mapRuleFromDb = (r: any) => ({
   priorite: r.priorite,
   statut: r.statut,
   entityId: r.entity_id || undefined,
-  tenantId: r.tenant_id || r.tenantId || undefined,
 });
 
 const mapAuditMissionToDb = (m: any) => ({
@@ -589,7 +583,6 @@ const mapAuditMissionToDb = (m: any) => ({
   date_debut: m.dateDebut,
   date_fin: m.dateFin,
   pilote_fonction_id: m.piloteFonctionId,
-  tenant_id: m.tenantId || m.tenant_id || null,
 });
 
 const mapAuditMissionFromDb = (m: any) => ({
@@ -601,7 +594,6 @@ const mapAuditMissionFromDb = (m: any) => ({
   dateDebut: m.date_debut,
   dateFin: m.date_fin,
   piloteFonctionId: m.pilote_fonction_id,
-  tenantId: m.tenant_id || m.tenantId || undefined,
 });
 
 const mapAuditFindingToDb = (f: any) => ({
@@ -613,7 +605,6 @@ const mapAuditFindingToDb = (f: any) => ({
   recommandation: f.recommandation,
   statut: f.statut,
   plan_remediation_id: f.planRemediationId || null,
-  tenant_id: f.tenantId || f.tenant_id || null,
 });
 
 const mapAuditFindingFromDb = (f: any) => ({
@@ -625,7 +616,6 @@ const mapAuditFindingFromDb = (f: any) => ({
   recommandation: f.recommandation,
   statut: f.statut,
   planRemediationId: f.plan_remediation_id || undefined,
-  tenantId: f.tenant_id || f.tenantId || undefined,
 });
 
 const mapComplianceObligationToDb = (o: any) => ({
@@ -636,7 +626,6 @@ const mapComplianceObligationToDb = (o: any) => ({
   statut: o.statut,
   responsable_fonction_id: o.responsableFonctionId,
   derniere_revue: o.derniereRevue,
-  tenant_id: o.tenantId || o.tenant_id || null,
 });
 
 const mapComplianceObligationFromDb = (o: any) => ({
@@ -647,7 +636,6 @@ const mapComplianceObligationFromDb = (o: any) => ({
   statut: o.statut,
   responsableFonctionId: o.responsable_fonction_id,
   derniereRevue: o.derniere_revue,
-  tenantId: o.tenant_id || o.tenantId || undefined,
 });
 
 const mapComplianceIncidentToDb = (i: any) => ({
@@ -996,26 +984,6 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
       data: null,
       message: error?.message || 'Une erreur est survenue lors de la récupération des données.',
     };
-  }
-};
-
-// Delete a row directly from Supabase DB to ensure deletions persist permanently
-export const deleteRowFromSupabase = async (
-  client: SupabaseClient | null,
-  tableName: string,
-  id: string
-): Promise<boolean> => {
-  if (!client || !id) return false;
-  try {
-    const { error } = await client.from(tableName).delete().eq('id', id);
-    if (error) {
-      console.warn(`[Supabase Delete Warning] Failed to delete id "${id}" from "${tableName}":`, error.message);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn(`[Supabase Delete Exception] Table "${tableName}":`, err);
-    return false;
   }
 };
 
