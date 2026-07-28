@@ -26,11 +26,15 @@ import {
 
 // Preset Users
 export const PRESET_USERS: User[] = [
-  { id: 'u1', name: 'Alain-Patrick Nkoumou', email: 'alainpatricknkoumou@gmail.com', role: 'Risk Manager', password: 'vito' },
-  { id: 'u2', name: 'Marie-Thérèse Atangana', email: 'mt.atangana@enterprise.com', role: 'Direction', password: 'vito' },
-  { id: 'u3', name: 'Jean-Pierre Ndzana', email: 'jp.ndzana@enterprise.com', role: 'Responsable', password: 'vito' },
-  { id: 'u4', name: 'Dieudonné Mbarga', email: 'd.mbarga@enterprise.com', role: 'Analyste', password: 'vito' },
-  { id: 'u5', name: 'SuperAdmin Kouam', email: 'admin@plateforme.com', role: 'SuperAdmin', password: 'vito' },
+  { id: 'u1', name: 'Alain-Patrick Nkoumou', email: 'alainpatricknkoumou@gmail.com', role: 'Risk Manager', password: 'vito', tenantId: 'tenant1' },
+  { id: 'u2', name: 'Marie-Thérèse Atangana', email: 'mt.atangana@enterprise.com', role: 'Direction', password: 'vito', tenantId: 'tenant1' },
+  { id: 'u3', name: 'Jean-Pierre Ndzana', email: 'jp.ndzana@enterprise.com', role: 'Responsable', password: 'vito', tenantId: 'tenant1' },
+  { id: 'u4', name: 'Dieudonné Mbarga', email: 'd.mbarga@enterprise.com', role: 'Analyste', password: 'vito', tenantId: 'tenant1' },
+  { id: 'u_aero1', name: 'Paul-Emile Nseng', email: 'pe.nseng@aerotech.com', role: 'Risk Manager', password: 'vito', tenantId: 'tenant2' },
+  { id: 'u_aero2', name: 'Claudine Ebogo', email: 'c.ebogo@aerotech.com', role: 'Direction', password: 'vito', tenantId: 'tenant2' },
+  { id: 'u_minfi1', name: 'Inspecteur Général MINFI', email: 'ig@minfi.gov.cm', role: 'Direction', password: 'vito', tenantId: 'tenant_minfi' },
+  { id: 'u_minfi2', name: 'Chef Cellule Gestion Risques', email: 'risques@minfi.gov.cm', role: 'Risk Manager', password: 'vito', tenantId: 'tenant_minfi' },
+  { id: 'u5', name: 'SuperAdmin Kouam', email: 'admin@plateforme.com', role: 'SuperAdmin', password: 'vito', tenantId: 'platform' },
 ];
 
 // Preset Tenant 1: Sogesti S.A. (follows exactly the IFACI 2013 Annex 1)

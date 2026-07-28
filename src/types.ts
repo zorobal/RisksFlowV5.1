@@ -260,6 +260,7 @@ export interface Risk {
   createdAt: string;
   statusId: string; // workflow step id
   tenantId?: string;
+  companyName?: string;
   
   // Rating values
   frequencyValue: number; // e.g. 1-4
@@ -293,6 +294,7 @@ export interface AuditLog {
 export interface EntrepriseCliente {
   id: string;
   raisonSociale: string;
+  nomComplet?: string;
   secteurActivite: string;
   specificationSecteur?: string; // Spécification descriptive sur l'activité
   dateCreationCompte: string;

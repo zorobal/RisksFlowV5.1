@@ -740,13 +740,14 @@ export default function App() {
 
   const activeTenantUsers = useMemo(() => {
     return users.filter(u => {
-      if (u.role === 'SuperAdmin') return true;
-      if (activeTenantId === 'tenant1') {
-        return !u.tenantId || u.tenantId === 'tenant1' || u.tenantId === activeEntreprise?.id || u.tenantId === activeTenantConfig?.id;
+      if (u.role === 'SuperAdmin') {
+        return isSuperAdminMode || (u.tenantId && (u.tenantId === activeTenantId || u.tenantId === activeTenantConfig?.id));
       }
-      return u.tenantId === activeTenantId || u.tenantId === activeEntreprise?.id || u.tenantId === activeTenantConfig?.id;
+      const userTenant = u.tenantId || 'tenant1';
+      const activeTenantIds = [activeTenantId, activeEntreprise?.id, activeTenantConfig?.id].filter(Boolean);
+      return activeTenantIds.includes(userTenant);
     });
-  }, [users, activeTenantId, activeEntreprise, activeTenantConfig]);
+  }, [users, activeTenantId, activeEntreprise, activeTenantConfig, isSuperAdminMode]);
 
   const addAuditLog = (action: string, details: string) => {
     const newLog: AuditLog = {

@@ -417,12 +417,12 @@ export default function RiskMappingModule({
             </button>
           </div>
         ) : viewMode === 'list' ? (
-          /* Odoo Style Beautiful Tree list Table view */
+          /* Odoo Style Beautiful Tree list Table view with scrollbar */
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-slate-300">
               <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-200">
+                <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10 shadow-2xs">
+                  <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider text-[10px]">
                     <th className="py-2.5 px-4 font-bold">Code</th>
                     <th className="py-2.5 px-4 font-bold">Intitulé du risque</th>
                     <th className="py-2.5 px-4 font-bold">Entité Affectée</th>

@@ -39,12 +39,14 @@ interface DashboardModuleProps {
   risks: Risk[];
   tenantConfig: TenantConfig;
   actions: ActionPlan[];
+  onAddLog?: (action: string, details: string) => void;
 }
 
 export default function DashboardModule({
   risks,
   tenantConfig,
-  actions
+  actions,
+  onAddLog
 }: DashboardModuleProps) {
   // Filters State
   const [selectedEntityId, setSelectedEntityId] = useState<string>('all');
@@ -841,7 +843,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      onAddLog('Export PNG Graphique', `Exportation de l'image du graphique "${chartTitle}" au format PNG.`);
+      onAddLog?.('Export PNG Graphique', `Exportation de l'image du graphique "${chartTitle}" au format PNG.`);
     } catch (err) {
       console.error("Erreur d'exportation PNG du graphique :", err);
       alert("Une erreur est survenue lors de l'exportation du graphique en PNG.");
@@ -873,7 +875,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           </span>
           <h2 className="text-xl font-black text-white flex items-center gap-2 tracking-tight">
             <TrendingUp className="w-5 h-5 text-indigo-400" />
-            Tableau de Bord Stratégique — Direction Générale
+            Tableau de Bord Stratégique — {tenantConfig.companyName || 'Raison Sociale'}
           </h2>
           <p className="text-slate-400 text-[11px] leading-relaxed">
             Cartographie dynamique, pilotage matriciel transverse et évaluation temps réel pour <strong className="text-slate-100">{tenantConfig.companyName}</strong>
@@ -885,8 +887,8 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
           {tenantConfig.logoUrl && (
             <img 
               src={tenantConfig.logoUrl} 
-              alt="Logo d'entreprise" 
-              className="h-10 max-w-[100px] object-contain rounded bg-white p-1 border border-slate-700" 
+              alt={`Logo ${tenantConfig.companyName}`} 
+              className="h-16 md:h-20 max-w-[220px] object-contain rounded-xl bg-white p-2 border border-slate-700 shadow-md transition-all hover:scale-105" 
               referrerPolicy="no-referrer"
             />
           )}
