@@ -24,10 +24,15 @@ import {
   User as UserIcon,
   ListFilter,
   PieChart,
-  BarChart3
+  BarChart3,
+  Printer,
+  Sliders,
+  Loader2,
+  Image as ImageIcon,
+  Search
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
-import { getCriticalityFromThresholds, getThresholdColorStyles, COLOR_PRESETS } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, getThresholdColorStyles, COLOR_PRESETS, generateDefaultThresholds } from '../utils/riskUtils';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
@@ -52,6 +57,9 @@ export default function DashboardModule({
   
   // Selected Risk for Multi-level Detailed Drill-down
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
+
+  // Search filter for active risks panel
+  const [riskSearchQuery, setRiskSearchQuery] = useState<string>('');
 
   // Temporal Date filters state
   const [selectedYear, setSelectedYear] = useState<string>('2026');
@@ -751,6 +759,53 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
     document.body.removeChild(link);
   };
 
+  const [isExportingPNG, setIsExportingPNG] = useState<boolean>(false);
+
+  const handleExportMatrixPNG = async () => {
+    setIsExportingPNG(true);
+    try {
+      const { toPng } = await import('html-to-image');
+
+      // Allow React to re-render matrix-decision-card with export header
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      const element = document.getElementById('matrix-decision-card');
+      if (!element) {
+        alert("Élément de la matrice introuvable.");
+        setIsExportingPNG(false);
+        return;
+      }
+
+      // Generate high-resolution PNG directly from the live DOM element
+      const dataUrl = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        filter: (node: HTMLElement) => {
+          if (node.classList && node.classList.contains('pdf-hide-action')) {
+            return false;
+          }
+          return true;
+        }
+      });
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const sanitizedCompanyName = tenantConfig.companyName.replace(/[^a-zA-Z0-9]/g, '_');
+      const link = document.createElement('a');
+      link.download = `Matrice_Risques_${sanitizedCompanyName}_${matrixType}_${dateStr}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Erreur lors de l'exportation PNG :", err);
+      alert("Une erreur s'est produite lors de la génération de l'image PNG.");
+    } finally {
+      setIsExportingPNG(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-6 bg-slate-50 overflow-y-auto space-y-6 text-slate-800 text-xs" id="dashboard-module-container">
       
@@ -1034,7 +1089,45 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left Side: Interactive Matrix Heatmap */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <div id="matrix-decision-card" className="lg:col-span-7 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+          
+          {/* Export Header rendered when generating image */}
+          {isExportingPNG && (
+            <div className="border-b-2 border-indigo-600 pb-4 mb-2 bg-white p-4 rounded-lg border border-slate-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="bg-indigo-600 text-white px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider font-mono">
+                    GRC PLATFORM — EXPORTATION IMAGE DE LA MATRICE
+                  </span>
+                  <h1 className="text-xl font-black text-slate-900 mt-2 mb-1">
+                    Matrice Décisionnelle des Risques — {tenantConfig.companyName}
+                  </h1>
+                  <p className="text-xs text-slate-600 font-semibold">
+                    Cartographie dynamique & Évaluation des seuils de criticité
+                  </p>
+                </div>
+                {tenantConfig.logoUrl && (
+                  <img src={tenantConfig.logoUrl} alt="Logo" className="h-12 max-w-[140px] object-contain rounded border border-slate-200 p-1" />
+                )}
+              </div>
+
+              {/* Filter Description Box */}
+              <div className="bg-slate-50 border border-slate-300 rounded-lg p-3 mt-3">
+                <h2 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wide mb-1.5 border-b border-slate-200 pb-1">
+                  Filtres d'Analyse Sélectionnés & Périmètre :
+                </h2>
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-800">
+                  <div><strong className="text-slate-600">Entité / Périmètre :</strong> {selectedEntityId === 'all' ? 'Périmètre Global (Toutes les entités)' : (tenantConfig.entities.find(e => e.id === selectedEntityId)?.name || selectedEntityId)}</div>
+                  <div><strong className="text-slate-600">Type de Consolidation :</strong> {selectedOrgMode === 'hierarchique' ? 'Hiérarchique (Strict)' : 'Matriciel (Transverse)'}</div>
+                  <div><strong className="text-slate-600">Catégorie Thématique :</strong> {selectedCategoryId === 'all' ? 'Toutes les catégories' : (tenantConfig.categories.find(c => c.id === selectedCategoryId)?.name || selectedCategoryId)}</div>
+                  <div><strong className="text-slate-600">Période Temporelle :</strong> {selectedYear === 'all' ? 'Toutes les années' : `Exercice ${selectedYear}`}{selectedPeriodicity === 'month' ? ` | Mensuel (${['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][selectedMonth - 1] || selectedMonth})` : selectedPeriodicity === 'trimester' ? ` | Trimestriel (T${selectedTrimester})` : ' | Annuel'}</div>
+                  <div><strong className="text-slate-600">Type de Matrice :</strong> {matrixType === 'brut' ? 'Matrice Brute (Fréquence x Impact)' : 'Matrice Résiduelle (Brute x Maîtrise)'}</div>
+                  <div><strong className="text-slate-600">Date d'Exportation :</strong> {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR')}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="space-y-0.5">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -1046,35 +1139,53 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
               </p>
             </div>
 
-            {/* Matrix Type Toggle */}
-            <div className="flex p-0.5 bg-slate-100 rounded-lg border">
+            <div className="flex items-center gap-2">
+              {/* Matrix Type Toggle */}
+              <div className="flex p-0.5 bg-slate-100 rounded-lg border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMatrixType('brut');
+                    setSelectedCell(null);
+                  }}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                    matrixType === 'brut' 
+                      ? 'bg-white text-slate-800 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Brute (F x I)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMatrixType('residuel');
+                    setSelectedCell(null);
+                  }}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
+                    matrixType === 'residuel' 
+                      ? 'bg-white text-slate-800 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Résiduelle (B x M)
+                </button>
+              </div>
+
+              {/* Export PNG Button for this block */}
               <button
                 type="button"
-                onClick={() => {
-                  setMatrixType('brut');
-                  setSelectedCell(null);
-                }}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
-                  matrixType === 'brut' 
-                    ? 'bg-white text-slate-800 shadow-xs' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
+                onClick={handleExportMatrixPNG}
+                disabled={isExportingPNG}
+                className="pdf-hide-action bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs hover:shadow active:scale-98 disabled:opacity-50 cursor-pointer"
+                title="Exporter uniquement la Matrice Décisionnelle et ses Seuils/Graduations au format image PNG"
               >
-                Brute (Fréquence x Impact)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMatrixType('residuel');
-                  setSelectedCell(null);
-                }}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
-                  matrixType === 'residuel' 
-                    ? 'bg-white text-slate-800 shadow-xs' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Résiduelle (Brute x Maîtrise)
+                {isExportingPNG ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-3.5 h-3.5" />
+                )}
+                <span>{isExportingPNG ? 'Génération...' : 'Exporter PNG'}</span>
               </button>
             </div>
           </div>
@@ -1162,94 +1273,283 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                 {matrixType === 'brut' ? '◀ Impact / Gravité (X) ▶' : '◀ Niveau d\'efficacité de Maîtrise (X) ▶'}
               </p>
             </div>
+
+            {/* Graduation & Seuils de Criticité section */}
+            <div className="pt-4 border-t border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                  Graduation & Seuils de Criticité
+                </h4>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full">
+                  Grille {size}x{size} ({matrixType === 'brut' ? 'Fréquence x Impact' : 'Matrice Résiduelle'})
+                </span>
+              </div>
+
+              {/* 1. Graduation des Échelles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px]">
+                {/* Axe Y Scale Graduation */}
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                  <p className="font-extrabold text-indigo-900 text-[10px] uppercase tracking-wide flex items-center gap-1 border-b border-slate-100 pb-1">
+                    <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                    {matrixType === 'brut' ? 'Graduation Fréquence / Probabilité (Y)' : 'Graduation Gravité Brute (Y)'}
+                  </p>
+                  <div className="space-y-1">
+                    {freqValues.map(f => {
+                      const scaleItem = matrixType === 'brut' 
+                        ? tenantConfig.scales.frequency.find(s => s.value === f) 
+                        : { value: f, label: `Palier Brut ${f}`, description: `Sévérité brute équivalente ${f}` };
+                      return (
+                        <div key={f} className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                          <span className="font-mono font-bold text-indigo-700 text-[10px]">Niveau {f}</span>
+                          <span className="font-bold text-slate-800">{scaleItem?.label || `Niveau ${f}`}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Axe X Scale Graduation */}
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                  <p className="font-extrabold text-teal-900 text-[10px] uppercase tracking-wide flex items-center gap-1 border-b border-slate-100 pb-1">
+                    <span className="w-2 h-2 rounded-full bg-teal-600"></span>
+                    {matrixType === 'brut' ? 'Graduation Impact / Gravité (X)' : 'Graduation Niveau de Maîtrise (X)'}
+                  </p>
+                  <div className="space-y-1">
+                    {impactValues.map(i => {
+                      const scaleItem = matrixType === 'brut'
+                        ? tenantConfig.scales.impact.find(s => s.value === i)
+                        : tenantConfig.scales.control?.find(s => s.value === i);
+                      return (
+                        <div key={i} className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                          <span className="font-mono font-bold text-teal-700 text-[10px]">{matrixType === 'brut' ? `Impact ${i}` : `Contrôle ${i}`}</span>
+                          <span className="font-bold text-slate-800">{scaleItem?.label || `Palier ${i}`}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Seuils de Criticité & Matrice de Rangs */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                  <p className="font-extrabold text-slate-800 text-[10.5px] uppercase tracking-wide">
+                    Seuils de Criticité & Répartition des Risques
+                  </p>
+                  <span className="text-[9.5px] font-semibold text-slate-400">Index de score & effectifs</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                  {(tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0 
+                    ? tenantConfig.matrixThresholds 
+                    : generateDefaultThresholds(size, 4)
+                  ).map((t, idx) => {
+                    const count = filteredRisks.filter(r => getCriticality(r.scoreResiduel).label === t.label).length;
+                    const colorStyle = getThresholdColorStyles(t.label, tenantConfig.matrixThresholds);
+                    return (
+                      <div 
+                        key={idx} 
+                        style={{ backgroundColor: colorStyle.bg, borderColor: colorStyle.border }}
+                        className="p-2 rounded-md border flex flex-col justify-between space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span style={{ color: colorStyle.text }} className="font-black text-[11px]">
+                            {t.label}
+                          </span>
+                          <span className="font-mono text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-white/90 shadow-2xs text-slate-800">
+                            Score {t.minScore}-{t.maxScore}
+                          </span>
+                        </div>
+                        {t.description && (
+                          <p className="text-[9px] text-slate-600 line-clamp-2 leading-tight">
+                            {t.description}
+                          </p>
+                        )}
+                        <div className="pt-1 border-t border-black/5 flex justify-between items-center text-[9px] font-bold text-slate-700">
+                          <span>Risques actifs :</span>
+                          <span className="font-mono bg-white px-1.5 py-0.2 rounded border border-slate-300 font-black">
+                            {count}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Export Footer rendered when generating image */}
+            {isExportingPNG && (
+              <div className="pt-3 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-500 font-medium bg-white">
+                <span>Sogesti GRC Platform — Exportation Image PNG de la Matrice Décisionnelle</span>
+                <span>Document Confidentiel — {tenantConfig.companyName}</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Side: List of Risks inside Selected Cell / Overall Top list if none selected */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
-          <div className="space-y-4">
+        <div className="lg:col-span-5 bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4 h-full min-h-[580px]">
+          <div className="space-y-3.5 flex-1 flex flex-col min-h-0">
+            {/* Title & Filter Header */}
             <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center justify-between">
-                <span>
-                  {selectedCell 
-                    ? `Risques dans la Cellule [${matrixType === 'brut' ? `F${selectedCell.y}, I${selectedCell.x}` : `B${selectedCell.y}, M${selectedCell.x}`}]`
-                    : 'Aperçu des Risques Actifs'}
-                </span>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>
+                    {selectedCell 
+                      ? `Risques Cellule [${matrixType === 'brut' ? `F${selectedCell.y}, I${selectedCell.x}` : `B${selectedCell.y}, M${selectedCell.x}`}]`
+                      : 'Aperçu des Risques Actifs'}
+                  </span>
+                </h3>
                 {selectedCell && (
                   <button 
+                    type="button"
                     onClick={() => setSelectedCell(null)}
-                    className="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold"
+                    className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-0.5 rounded text-[10px] font-bold transition-all border border-indigo-100"
                   >
                     Effacer filtre
                   </button>
                 )}
-              </h3>
+              </div>
               <p className="text-[10.5px] text-slate-400 mt-1">
                 {selectedCell 
-                  ? `Il y a ${cellRisks.length} risque(s) correspondant à cette criticité.`
-                  : `Visualisez les risques consolidés (${filteredRisks.length} au total).`}
+                  ? `Il y a ${cellRisks.length} risque(s) dans cette cellule de criticité.`
+                  : `Visualisation dynamique des risques consolidés dans cet espace (${filteredRisks.length} au total).`}
               </p>
             </div>
 
-            {/* List of Risks */}
-            <div className="space-y-3.5 max-h-[340px] overflow-y-auto pr-1">
-              {(selectedCell ? cellRisks : filteredRisks).length === 0 ? (
-                <div className="py-12 text-center text-slate-450 space-y-2">
-                  <Info className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="font-bold text-[11px]">Aucun risque référencé</p>
-                  <p className="text-[10px] text-slate-400">Ajustez vos filtres ou sélectionnez une autre cellule de la matrice.</p>
+            {/* Quick Search & Count Pills */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par titre, ID, catégorie..."
+                  value={riskSearchQuery}
+                  onChange={(e) => setRiskSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-all"
+                />
+                {riskSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setRiskSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Status Chips */}
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5 px-0.5">
+                <span className="font-semibold">
+                  {(selectedCell ? cellRisks : filteredRisks).filter(r => 
+                    !riskSearchQuery || 
+                    r.title.toLowerCase().includes(riskSearchQuery.toLowerCase()) || 
+                    r.id.toLowerCase().includes(riskSearchQuery.toLowerCase()) || 
+                    resolveCategoryName(r.categoryId).toLowerCase().includes(riskSearchQuery.toLowerCase())
+                  ).length} risque(s) affiché(s)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 font-extrabold rounded text-[9.5px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                    Espace Actif
+                  </span>
                 </div>
-              ) : (
-                (selectedCell ? cellRisks : filteredRisks).map(r => {
+              </div>
+            </div>
+
+            {/* List of Risks */}
+            <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-[360px] max-h-[520px]">
+              {(() => {
+                const sourceRisks = selectedCell ? cellRisks : filteredRisks;
+                const displayList = sourceRisks.filter(r => 
+                  !riskSearchQuery || 
+                  r.title.toLowerCase().includes(riskSearchQuery.toLowerCase()) || 
+                  r.id.toLowerCase().includes(riskSearchQuery.toLowerCase()) || 
+                  resolveCategoryName(r.categoryId).toLowerCase().includes(riskSearchQuery.toLowerCase())
+                );
+
+                if (displayList.length === 0) {
+                  return (
+                    <div className="py-16 text-center text-slate-450 space-y-2.5 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                      <Info className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="font-bold text-[11px] text-slate-600">Aucun risque correspondant</p>
+                      <p className="text-[10px] text-slate-400 max-w-[220px] mx-auto">
+                        Ajustez vos filtres de recherche ou sélectionnez une autre cellule dans la matrice.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return displayList.map(r => {
                   const crit = getCriticality(r.scoreResiduel);
                   const isSelected = selectedRiskId === r.id;
+                  const entObj = tenantConfig.entities.find(e => e.id === r.entityId);
+                  const entityName = entObj?.name || r.entityId || 'Global';
 
                   return (
                     <div 
                       key={r.id}
                       onClick={() => setSelectedRiskId(r.id)}
-                      className={`p-3 rounded-lg border transition-all cursor-pointer space-y-2 ${
+                      className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
                         isSelected 
-                          ? 'border-indigo-500 bg-indigo-50/20 shadow-xs' 
-                          : 'border-slate-150 hover:border-slate-350 bg-slate-50/50 hover:bg-slate-50'
+                          ? 'border-indigo-500 bg-indigo-50/30 shadow-xs ring-1 ring-indigo-400/40' 
+                          : 'border-slate-200 hover:border-slate-350 bg-slate-50/50 hover:bg-slate-50/80 shadow-2xs'
                       }`}
                     >
                       <div className="flex justify-between items-start gap-2">
-                        <div className="space-y-0.5">
-                          <span className="font-mono font-bold text-[9px] text-slate-600 bg-slate-200/80 px-1.5 py-0.5 rounded">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono font-bold text-[9px] text-slate-700 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
                             {r.id}
                           </span>
-                          <span className="text-[9.5px] text-slate-400 ml-2 font-medium">
+                          <span className="text-[9.5px] text-indigo-700 font-bold bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-100/60 truncate max-w-[120px]">
                             {resolveCategoryName(r.categoryId)}
+                          </span>
+                          <span className="text-[9.5px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[110px]">
+                            {entityName}
                           </span>
                         </div>
 
                         <span 
                           style={{ backgroundColor: crit.color, color: crit.textColor }}
-                          className="px-2 py-0.5 rounded text-[9px] font-bold shrink-0 border border-white/10"
+                          className="px-2 py-0.5 rounded-full text-[9px] font-black shrink-0 shadow-2xs border border-white/20"
                         >
-                          Index Net: {r.scoreResiduel}
+                          {crit.label} ({r.scoreResiduel})
                         </span>
                       </div>
 
-                      <h4 className="font-bold text-slate-900 text-[11px] hover:text-indigo-650">
+                      <h4 className="font-bold text-slate-900 text-xs leading-snug hover:text-indigo-600 transition-colors">
                         {r.title}
                       </h4>
 
-                      <div className="flex justify-between items-center text-[10px] text-slate-400">
-                        <span>F:{r.frequencyValue} | I:{r.impactValue} | M:{r.controlValue}</span>
-                        <span className="text-[10.5px] font-bold text-indigo-600">Voir détails →</span>
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-2 font-mono text-[9.5px]">
+                          <span className="bg-slate-100 px-1 py-0.2 rounded">F: <strong className="text-slate-800">{r.frequencyValue}</strong></span>
+                          <span className="bg-slate-100 px-1 py-0.2 rounded">I: <strong className="text-slate-800">{r.impactValue}</strong></span>
+                          <span className="bg-slate-100 px-1 py-0.2 rounded">M: <strong className="text-slate-800">{r.controlValue}</strong></span>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                          Audit <ArrowRight className="w-3 h-3" />
+                        </span>
                       </div>
                     </div>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 flex items-center gap-1">
-            <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span>Sélectionnez un risque pour lancer l'audit de détails multi-niveau.</span>
+          {/* Card Footer Summary */}
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+            <div className="flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span>Cliquez sur un risque pour ouvrir l'analyse détaillée.</span>
+            </div>
+            <div className="font-bold text-slate-700 font-mono text-[10px]">
+              Moy. Net : <span className="text-indigo-600 font-black">{avgResidualScore}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1463,7 +1763,6 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
 
                         {/* Grouped Bars for each Entity */}
                         {dataWithPct.map((u) => {
-                          const levelColors = ['#2563EB', '#DC2626', '#16A34A', '#9333EA'];
                           return (
                             <div key={u.id} className="flex-1 flex flex-col items-center h-full justify-end z-10 group relative min-w-0">
                               {/* Hover Tooltip */}
@@ -1477,7 +1776,8 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                                 {/* Bars for each Criticality Threshold */}
                                 {u.levelCounts.map((level, idx) => {
                                   const barH = level.count > 0 ? Math.max(8, Math.round((level.count / maxVol) * 100)) : 0;
-                                  const color = levelColors[idx % levelColors.length] || level.color;
+                                  const colorStyle = getThresholdColorStyles(level.label, tenantConfig.matrixThresholds);
+                                  const color = colorStyle.text || level.color || '#4F46E5';
                                   return (
                                     <div
                                       key={idx}
@@ -1565,33 +1865,33 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                 </div>
               </div>
 
-              {/* Exact Excel Style Bottom Legend */}
+              {/* Dynamic Threshold Legend matching Configuration */}
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-[10.5px] font-bold text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-xs bg-[#2563EB] shadow-2xs"></span>
-                  Risques Très élevé
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-xs bg-[#DC2626] shadow-2xs"></span>
-                  Risques Élevé
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-xs bg-[#16A34A] shadow-2xs"></span>
-                  Risques Moyen
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-xs bg-[#9333EA] shadow-2xs"></span>
-                  Risques Faible
-                </span>
+                {(tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0 
+                  ? tenantConfig.matrixThresholds 
+                  : generateDefaultThresholds(size, 4)
+                ).map((t, idx) => {
+                  const colorStyle = getThresholdColorStyles(t.label, tenantConfig.matrixThresholds);
+                  const color = colorStyle.text || t.color || '#4F46E5';
+                  return (
+                    <span key={idx} className="flex items-center gap-1.5">
+                      <span 
+                        className="w-3.5 h-3.5 rounded-xs shadow-2xs border border-black/10" 
+                        style={{ backgroundColor: color }}
+                      ></span>
+                      <span>Risques {t.label}</span>
+                    </span>
+                  );
+                })}
                 <span className="flex items-center gap-1.5">
                   <span className="w-3.5 h-3.5 rounded-xs bg-cyan-500 shadow-2xs"></span>
-                  Risques Total
+                  Total Risques
                 </span>
                 <span className="flex items-center gap-1.5 text-orange-600 font-extrabold">
                   <span className="w-5 h-1 bg-orange-500 rounded-full inline-block relative">
                     <span className="w-2 h-2 rounded-full bg-orange-600 border border-white absolute -top-0.5 left-1.5"></span>
                   </span>
-                  Risques %
+                  Proportion %
                 </span>
               </div>
             </div>

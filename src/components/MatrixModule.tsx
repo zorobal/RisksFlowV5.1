@@ -30,8 +30,10 @@ import {
   Edit3,
   X,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import { Risk, TenantConfig, ActionPlan, MatrixThreshold } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
@@ -252,6 +254,71 @@ export default function MatrixModule({
   const handlePrint = () => {
     onAddLog('Exportation Cartographie', `Déclenchement de l'impression du rapport papier (${size}x${size})`);
     window.print();
+  };
+
+  // Export Table to Excel (.xlsx)
+  const handleExportExcel = () => {
+    onAddLog('Exportation Excel', `Génération du registre général au format Excel (.xlsx) pour ${filteredRisks.length} risques.`);
+    
+    const excelData = filteredRisks.map(risk => {
+      const trend = getRiskTrend(risk);
+      const critBrut = getCriticality(risk.scoreBrut);
+      const critNet = getCriticality(risk.scoreResiduel);
+      const categoryName = (tenantConfig.categories || []).find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase())?.name || risk.categoryId || 'Inconnu';
+      const entityName = tenantConfig.entities.find(e => e.id === risk.entityId)?.name || risk.entityId || 'Global';
+
+      return {
+        'Code Risque': risk.id,
+        'Entité / Périmètre': entityName,
+        'Nature / Catégorie': categoryName,
+        'Intitulé du Risque': risk.title,
+        'Description Détaillée': risk.description || '',
+        'Causes du Risque': risk.causes || '',
+        'Conséquences du Risque': getRiskConsequences(risk) || '',
+        'Probabilité (F)': risk.frequencyValue,
+        'Impact / Gravité (I)': risk.impactValue,
+        'Score Brut': risk.scoreBrut,
+        'Niveau Brut': critBrut.label,
+        'Coeff. Maîtrise (M)': risk.controlValue,
+        'Score Net (Résiduel)': risk.scoreResiduel,
+        'Niveau Net': critNet.label,
+        'Tendance': trend.label,
+        'Statut Workflow': risk.statusId || 'Identifié',
+        'Responsable / Auteur': risk.createdBy || 'Responsable GRC',
+        'Date Enregistrement': risk.createdAt ? new Date(risk.createdAt).toLocaleDateString('fr-FR') : ''
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    // Auto-adjust column widths
+    worksheet['!cols'] = [
+      { wch: 14 }, // Code Risque
+      { wch: 24 }, // Entité / Périmètre
+      { wch: 25 }, // Nature / Catégorie
+      { wch: 32 }, // Intitulé du Risque
+      { wch: 45 }, // Description
+      { wch: 35 }, // Causes
+      { wch: 35 }, // Conséquences
+      { wch: 14 }, // Prob
+      { wch: 18 }, // Impact
+      { wch: 12 }, // Score Brut
+      { wch: 16 }, // Niveau Brut
+      { wch: 16 }, // Coeff M
+      { wch: 18 }, // Score Net
+      { wch: 16 }, // Niveau Net
+      { wch: 14 }, // Tendance
+      { wch: 16 }, // Statut
+      { wch: 24 }, // Responsable
+      { wch: 18 }  // Date
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Registre_Général_Risques');
+
+    const sanitizedName = tenantConfig.companyName.replace(/[^a-zA-Z0-9]/g, '_');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `Registre_General_Risques_${sanitizedName}_${dateStr}.xlsx`);
   };
 
   // High-fidelity PNG Export using html2canvas
@@ -1156,7 +1223,7 @@ export default function MatrixModule({
                             return (
                               <div
                                 key={i}
-                                className="rounded-lg p-2.5 flex flex-col justify-start min-h-[6rem] h-auto pb-4 shadow-md transition-all border relative overflow-visible"
+                                className="rounded-lg p-2 flex flex-col items-center justify-center min-h-[5.5rem] h-auto shadow-md transition-all border relative overflow-visible"
                                 style={{
                                   backgroundColor: styles.bg,
                                   color: styles.text,
@@ -1168,28 +1235,15 @@ export default function MatrixModule({
                                   P{f}, I{i}
                                 </span>
 
-                                {/* Risks list */}
-                                {cellRisks.length === 0 ? (
-                                  <div className="flex-1 flex items-center justify-center mt-3">
-                                    <span className="text-[10px] font-bold opacity-30 select-none">-</span>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-1.5 overflow-visible mt-3 w-full text-left">
-                                    {cellRisks.map((r) => (
-                                      <div 
-                                        key={r.id} 
-                                        className="text-[9px] font-bold leading-tight border-b border-black/10 pb-1 last:border-0 last:pb-0"
-                                      >
-                                        <p className="font-mono underline text-[8.5px] tracking-wide select-all opacity-80">
-                                          {r.id}
-                                        </p>
-                                        <p className="leading-tight break-words text-[9px] font-bold">
-                                          {r.title}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                {/* Display count of identified risks */}
+                                <div className="flex flex-col items-center justify-center my-auto py-1 text-center">
+                                  <span className={`text-2xl font-black tracking-tight ${cellRisks.length > 0 ? 'opacity-100' : 'opacity-25'}`}>
+                                    {cellRisks.length}
+                                  </span>
+                                  <span className={`text-[9.5px] font-black uppercase tracking-wider ${cellRisks.length > 0 ? 'opacity-90' : 'opacity-35'}`}>
+                                    {cellRisks.length === 1 ? 'Risque' : 'Risques'}
+                                  </span>
+                                </div>
                               </div>
                             );
                           })}
@@ -1233,18 +1287,26 @@ export default function MatrixModule({
           </div>
           
           {/* Table actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
+              title="Exporter le registre général au format tableur Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Exporter Registre Excel (.xlsx)
+            </button>
             <button
               onClick={() => handleExportPNG(registerTableRef, `registre-risques-${tenantConfig.id}.png`)}
               disabled={isExporting}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              Exporter Registre en Image PNG
+              Exporter Registre PNG
             </button>
             <button
               onClick={() => setIsPrintMode(true)}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5 text-indigo-400" />
               Aperçu PDF Paysage
