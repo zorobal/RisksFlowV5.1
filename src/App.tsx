@@ -740,12 +740,42 @@ export default function App() {
 
   const activeTenantUsers = useMemo(() => {
     return users.filter(u => {
+      // SuperAdmin is only displayed in SuperAdmin mode
       if (u.role === 'SuperAdmin') {
-        return isSuperAdminMode || (u.tenantId && (u.tenantId === activeTenantId || u.tenantId === activeTenantConfig?.id));
+        return isSuperAdminMode;
       }
-      const userTenant = u.tenantId || 'tenant1';
-      const activeTenantIds = [activeTenantId, activeEntreprise?.id, activeTenantConfig?.id].filter(Boolean);
-      return activeTenantIds.includes(userTenant);
+
+      // Determine explicit tenant ID for user
+      let userTenant = u.tenantId;
+      if (!userTenant) {
+        const em = (u.email || '').toLowerCase();
+        if (em.endsWith('@minfi.cm') || em.endsWith('@minfi.gov.cm')) userTenant = 'tenant_minfi';
+        else if (em.endsWith('@aerotech.com')) userTenant = 'tenant2';
+        else userTenant = 'tenant1';
+      }
+
+      // Identify active tenant identifiers
+      const activeIds = [
+        activeTenantId,
+        activeEntreprise?.id,
+        activeTenantConfig?.id
+      ].filter(Boolean) as string[];
+
+      // Direct match
+      if (activeIds.includes(userTenant)) return true;
+
+      // Domain-based match for custom enterprise tenants
+      const em = (u.email || '').toLowerCase();
+      if ((activeTenantId === 'tenant_minfi' || activeTenantId.includes('minfi') || activeTenantConfig?.companyName?.toLowerCase().includes('finances')) &&
+          (em.endsWith('@minfi.cm') || em.endsWith('@minfi.gov.cm'))) {
+        return true;
+      }
+      if ((activeTenantId === 'tenant2' || activeTenantConfig?.companyName?.toLowerCase().includes('aerotech')) &&
+          em.endsWith('@aerotech.com')) {
+        return true;
+      }
+
+      return false;
     });
   }, [users, activeTenantId, activeEntreprise, activeTenantConfig, isSuperAdminMode]);
 
@@ -952,7 +982,11 @@ export default function App() {
                 isSuperAdminMode={isSuperAdminMode}
                 onAddRisk={handleAddRisk}
                 onUpdateRisk={(updated) => setRisks(prev => prev.map(r => r.id === updated.id ? { ...updated, tenantId: updated.tenantId || r.tenantId || activeTenantId } : r))}
-                onDeleteRisk={(id) => setRisks(prev => prev.filter(r => r.id !== id))}
+                onDeleteRisk={(id) => {
+                  setRisks(prev => prev.filter(r => r.id !== id));
+                  setActions(prev => prev.filter(a => a.riskId !== id));
+                  addAuditLog('Suppression de Risque', `Suppression définitive du risque ${id} et de ses plans d'action rattachés.`);
+                }}
                 onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
                 onAddLog={addAuditLog}
               />
@@ -1003,6 +1037,9 @@ export default function App() {
                 accessProfiles={accessProfiles}
                 onUpdateAccessProfiles={setAccessProfiles}
                 users={activeTenantUsers}
+                onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}`, tenantId: u.tenantId || activeTenantId }])}
+                onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
+                onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? { ...u, tenantId: u.tenantId || item.tenantId || activeTenantId } : item))}
                 onAddLog={addAuditLog}
                 maxSuccursales={activeLicence?.nombre_succursales_max ?? 5}
                 maxDirections={5}

@@ -878,7 +878,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
             Tableau de Bord Stratégique — {tenantConfig.companyName || 'Raison Sociale'}
           </h2>
           <p className="text-slate-400 text-[11px] leading-relaxed">
-            Cartographie dynamique, pilotage matriciel transverse et évaluation temps réel pour <strong className="text-slate-100">{tenantConfig.companyName}</strong>
+            Cartographie dynamique, pilotage matriciel transverse et évaluation temps réel
           </p>
         </div>
 

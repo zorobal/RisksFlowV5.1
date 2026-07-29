@@ -514,9 +514,25 @@ export default function RiskMappingModule({
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[9px]">
-                      {risk.id}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[9px]">
+                        {risk.id}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Êtes-vous sûr de vouloir supprimer définitivement le risque [${risk.id}] ${risk.title} ?`)) {
+                            onDeleteRisk(risk.id);
+                            if (selectedRisk?.id === risk.id) setSelectedRisk(null);
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                        title="Supprimer ce risque"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                     <span 
                       className="px-2 py-0.5 rounded text-[9px] font-bold border"
                       style={{ backgroundColor: crit.color, color: crit.textColor, borderColor: crit.textColor + '30' }}
@@ -661,9 +677,28 @@ export default function RiskMappingModule({
           
           {/* Header Odoo stage bar */}
           <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <span className="font-bold text-slate-700">
-              {isCreating ? "✏️ Création Risque" : `📄 Fiche ${selectedRisk?.id}`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700">
+                {isCreating ? "✏️ Création Risque" : `📄 Fiche ${selectedRisk?.id}`}
+              </span>
+              {!isCreating && selectedRisk && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Êtes-vous sûr de vouloir supprimer définitivement le risque [${selectedRisk.id}] ${selectedRisk.title} ?`)) {
+                      onDeleteRisk(selectedRisk.id);
+                      setSelectedRisk(null);
+                      onAddLog('Suppression Risque', `Suppression du risque ${selectedRisk.id}`);
+                    }
+                  }}
+                  className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[10px] font-bold border border-red-200 flex items-center gap-1 cursor-pointer transition"
+                  title="Supprimer ce risque"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Supprimer</span>
+                </button>
+              )}
+            </div>
 
             {/* Clickable Status Bar */}
             {!isCreating && (

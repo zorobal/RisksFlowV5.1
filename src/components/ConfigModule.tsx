@@ -1859,12 +1859,9 @@ export default function ConfigModule({
                         onChange={(e) => setAssignUser(e.target.value)}
                         className="w-full bg-white border border-slate-255 rounded p-1.5 text-slate-650 font-semibold"
                       >
-                        {users
-                          .filter(u => u.tenantId === tenantConfig.id || (tenantConfig.id === 'tenant1' && !u.tenantId))
-                          .map(u => (
-                            <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                          ))
-                        }
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                        ))}
                       </select>
                     </div>
 
@@ -2004,9 +2001,7 @@ export default function ConfigModule({
                       </tr>
                     </thead>
                     <tbody className="divide-y text-[10.5px]">
-                      {users
-                        .filter(u => u.tenantId === tenantConfig.id || (tenantConfig.id === 'tenant1' && !u.tenantId))
-                        .map(u => {
+                      {users.map(u => {
                           const unitObj = tenantConfig.entities.find(e => e.id === u.entityId);
                           return (
                             <tr key={u.id} className="hover:bg-slate-50/50">
