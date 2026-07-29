@@ -1017,3 +1017,22 @@ export const pullAllFromSupabase = async (client: SupabaseClient): Promise<{ suc
   }
 };
 
+// Delete a single record from Supabase table
+export const deleteItemFromSupabase = async (
+  client: SupabaseClient,
+  tableName: string,
+  id: string | number
+): Promise<{ success: boolean; error?: any }> => {
+  try {
+    const { error } = await client.from(tableName).delete().eq('id', String(id));
+    if (error) {
+      console.warn(`[Supabase Delete Warning] Table "${tableName}" ID ${id}:`, error.message);
+      return { success: false, error };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error(`[Supabase Delete Exception] Table "${tableName}" ID ${id}:`, err);
+    return { success: false, error: err };
+  }
+};
+

@@ -20,7 +20,7 @@ import LoginModule from './components/LoginModule';
 import DemoModule from './components/DemoModule';
 import { generateScalesForSize } from './components/ConfigModule';
 import { generateDefaultThresholds } from './utils/riskUtils';
-import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase } from './lib/supabase';
+import { getSupabaseClient, pullAllFromSupabase, pushAllToSupabase, deleteItemFromSupabase } from './lib/supabase';
 
 import { 
   SOGESTI_CONFIG, 
@@ -306,96 +306,116 @@ export default function App() {
           const res = await pullAllFromSupabase(client);
           if (res.success && res.data) {
             const d = res.data;
-            const finalTenants = mergeTenantsWithLocal(d.tenants || [], localDataset?.tenants || []);
-            const tenantsToSet = finalTenants.length > 0 ? finalTenants : [SOGESTI_CONFIG, AEROTECH_CONFIG, MINFI_CONFIG];
-            if (!tenantsToSet.some(t => t.id === MINFI_CONFIG.id)) {
-              tenantsToSet.push(MINFI_CONFIG);
+
+            const finalTenants = d.tenants && d.tenants.length > 0
+              ? d.tenants
+              : (localDataset?.tenants?.length ? localDataset.tenants : [SOGESTI_CONFIG, AEROTECH_CONFIG, MINFI_CONFIG]);
+            if (!finalTenants.some((t: any) => t.id === MINFI_CONFIG.id)) {
+              finalTenants.push(MINFI_CONFIG);
             }
-            setTenants(tenantsToSet);
+            setTenants(finalTenants);
 
-            if (d.users?.length || localDataset?.users?.length) {
-              const mergedUsers = mergeArraysWithLocal<User>(d.users || [], localDataset?.users || []);
-              PRESET_USERS.forEach(pu => {
-                if (!mergedUsers.some(u => u.email.toLowerCase() === pu.email.toLowerCase())) {
-                  mergedUsers.push(pu);
-                }
-              });
-              setUsers(mergedUsers);
-            }
+            const usersToSet = d.users && d.users.length > 0
+              ? d.users
+              : (localDataset?.users?.length ? localDataset.users : PRESET_USERS);
+            setUsers(usersToSet);
 
-            const mergedRisks = mergeRisksWithLocal(d.risks || [], localDataset?.risks || []);
-            const finalRisks = mergedRisks.length > 0 ? mergedRisks : [...ALL_PRESET_RISKS];
-            // Ensure MINFI risks are present
-            MINFI_RISKS.forEach(mr => {
-              if (!finalRisks.some(r => r.id === mr.id)) {
-                finalRisks.push(mr);
-              }
-            });
-            setRisks(finalRisks);
+            const risksToSet = d.risks && d.risks.length > 0
+              ? d.risks
+              : (localDataset?.risks?.length ? localDataset.risks : [...ALL_PRESET_RISKS]);
+            setRisks(risksToSet);
 
-            const finalActions = mergeActionsWithLocal(d.actions || [], localDataset?.actions || []);
-            setActions(finalActions);
+            const actionsToSet = d.actions && d.actions.length > 0
+              ? d.actions
+              : (localDataset?.actions?.length ? localDataset.actions : PRESET_ACTIONS);
+            setActions(actionsToSet);
 
-            const finalSessions = mergeSessionsWithLocal(d.sessions || [], localDataset?.sessions || []);
-            const sessionsToSet = finalSessions.length > 0 ? finalSessions : PRESET_SESSIONS;
+            const sessionsToSet = d.sessions && d.sessions.length > 0
+              ? d.sessions
+              : (localDataset?.sessions?.length ? localDataset.sessions : PRESET_SESSIONS);
             setSessions(sessionsToSet);
 
-            const finalMissions = mergeArraysWithLocal(d.auditMissions || [], localDataset?.auditMissions || []);
-            setAuditMissions(finalMissions);
+            const auditMissionsToSet = d.auditMissions && d.auditMissions.length > 0
+              ? d.auditMissions
+              : (localDataset?.auditMissions?.length ? localDataset.auditMissions : []);
+            setAuditMissions(auditMissionsToSet);
 
-            const finalFindings = mergeArraysWithLocal(d.auditFindings || [], localDataset?.auditFindings || []);
-            setAuditFindings(finalFindings);
+            const auditFindingsToSet = d.auditFindings && d.auditFindings.length > 0
+              ? d.auditFindings
+              : (localDataset?.auditFindings?.length ? localDataset.auditFindings : []);
+            setAuditFindings(auditFindingsToSet);
 
-            const finalFrameworks = mergeArraysWithLocal(d.complianceFrameworks || [], localDataset?.complianceFrameworks || []);
-            setComplianceFrameworks(finalFrameworks);
+            const complianceFrameworksToSet = d.complianceFrameworks && d.complianceFrameworks.length > 0
+              ? d.complianceFrameworks
+              : (localDataset?.complianceFrameworks?.length ? localDataset.complianceFrameworks : []);
+            setComplianceFrameworks(complianceFrameworksToSet);
 
-            const finalObligations = mergeArraysWithLocal(d.complianceObligations || [], localDataset?.complianceObligations || []);
-            setComplianceObligations(finalObligations);
+            const complianceObligationsToSet = d.complianceObligations && d.complianceObligations.length > 0
+              ? d.complianceObligations
+              : (localDataset?.complianceObligations?.length ? localDataset.complianceObligations : []);
+            setComplianceObligations(complianceObligationsToSet);
 
-            const finalIncidents = mergeArraysWithLocal(d.complianceIncidents || [], localDataset?.complianceIncidents || []);
-            setComplianceIncidents(finalIncidents);
+            const complianceIncidentsToSet = d.complianceIncidents && d.complianceIncidents.length > 0
+              ? d.complianceIncidents
+              : (localDataset?.complianceIncidents?.length ? localDataset.complianceIncidents : []);
+            setComplianceIncidents(complianceIncidentsToSet);
 
-            const mergedEntreprises = mergeArraysWithLocal<EntrepriseCliente>(d.entreprises || [], localDataset?.entreprises || []);
-            const finalEntreprises = mergedEntreprises.length > 0 ? mergedEntreprises : [...PRESET_ENTREPRISES];
-            PRESET_ENTREPRISES.forEach(pe => {
-              if (!finalEntreprises.some(e => e.id === pe.id || e.raisonSociale === pe.raisonSociale)) {
-                finalEntreprises.push(pe);
-              }
-            });
-            setEntreprises(finalEntreprises);
+            const entreprisesToSet = d.entreprises && d.entreprises.length > 0
+              ? d.entreprises
+              : (localDataset?.entreprises?.length ? localDataset.entreprises : PRESET_ENTREPRISES);
+            setEntreprises(entreprisesToSet);
 
-            const mergedLicences = mergeArraysWithLocal<Licence>(d.licences || [], localDataset?.licences || []);
-            const finalLicences = mergedLicences.length > 0 ? mergedLicences : [...PRESET_LICENCES];
-            PRESET_LICENCES.forEach(pl => {
-              if (!finalLicences.some(l => l.id === pl.id || l.entrepriseId === pl.entrepriseId)) {
-                finalLicences.push(pl);
-              }
-            });
-            setLicences(finalLicences);
+            const licencesToSet = d.licences && d.licences.length > 0
+              ? d.licences
+              : (localDataset?.licences?.length ? localDataset.licences : PRESET_LICENCES);
+            setLicences(licencesToSet);
 
-            const finalHistLicences = mergeArraysWithLocal(d.historiqueLicences || [], localDataset?.historiqueLicences || []);
-            setHistoriqueLicences(finalHistLicences);
+            const histLicencesToSet = d.historiqueLicences && d.historiqueLicences.length > 0
+              ? d.historiqueLicences
+              : (localDataset?.historiqueLicences?.length ? localDataset.historiqueLicences : []);
+            setHistoriqueLicences(histLicencesToSet);
 
-            if (d.auditLogs?.length) setAuditLogs(mergeArraysWithLocal(d.auditLogs, localDataset?.auditLogs || []));
-            if (d.fonctions?.length) setFonctions(mergeArraysWithLocal(d.fonctions, localDataset?.fonctions || []));
-            if (d.affectations?.length) setAffectations(mergeArraysWithLocal(d.affectations, localDataset?.affectations || []));
-            if (d.rules?.length) setRules(mergeArraysWithLocal(d.rules, localDataset?.rules || []));
-            if (d.accessProfiles?.length) setAccessProfiles(d.accessProfiles);
+            if (d.auditLogs?.length) setAuditLogs(d.auditLogs);
+
+            const fonctionsToSet = d.fonctions && d.fonctions.length > 0
+              ? d.fonctions
+              : (localDataset?.fonctions?.length ? localDataset.fonctions : PRESET_FONCTIONS);
+            setFonctions(fonctionsToSet);
+
+            const affectationsToSet = d.affectations && d.affectations.length > 0
+              ? d.affectations
+              : (localDataset?.affectations?.length ? localDataset.affectations : PRESET_AFFECTATIONS);
+            setAffectations(affectationsToSet);
+
+            const rulesToSet = d.rules && d.rules.length > 0
+              ? d.rules
+              : (localDataset?.rules?.length ? localDataset.rules : PRESET_RULES);
+            setRules(rulesToSet);
+
+            const accessProfilesToSet = d.accessProfiles && d.accessProfiles.length > 0
+              ? d.accessProfiles
+              : (localDataset?.accessProfiles?.length ? localDataset.accessProfiles : PRESET_ACCESS_PROFILES);
+            setAccessProfiles(accessProfilesToSet);
 
             const mergedDataset = {
-              ...d,
-              tenants: tenantsToSet,
-              risks: finalRisks,
-              actions: finalActions,
+              tenants: finalTenants,
+              users: usersToSet,
+              risks: risksToSet,
+              actions: actionsToSet,
               sessions: sessionsToSet,
-              auditMissions: finalMissions,
-              auditFindings: finalFindings,
-              complianceFrameworks: finalFrameworks,
-              complianceObligations: finalObligations,
-              complianceIncidents: finalIncidents,
-              entreprises: finalEntreprises,
-              licences: finalLicences,
-              historiqueLicences: finalHistLicences
+              auditMissions: auditMissionsToSet,
+              auditFindings: auditFindingsToSet,
+              complianceFrameworks: complianceFrameworksToSet,
+              complianceObligations: complianceObligationsToSet,
+              complianceIncidents: complianceIncidentsToSet,
+              entreprises: entreprisesToSet,
+              licences: licencesToSet,
+              historiqueLicences: histLicencesToSet,
+              auditLogs: d.auditLogs || localDataset?.auditLogs || [],
+              fonctions: fonctionsToSet,
+              affectations: affectationsToSet,
+              rules: rulesToSet,
+              accessProfiles: accessProfilesToSet
             };
 
             try {
@@ -986,6 +1006,10 @@ export default function App() {
                   setRisks(prev => prev.filter(r => r.id !== id));
                   setActions(prev => prev.filter(a => a.riskId !== id));
                   addAuditLog('Suppression de Risque', `Suppression définitive du risque ${id} et de ses plans d'action rattachés.`);
+                  const client = getSupabaseClient();
+                  if (client) {
+                    deleteItemFromSupabase(client, 'risks', id);
+                  }
                 }}
                 onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
                 onAddLog={addAuditLog}
@@ -1038,7 +1062,11 @@ export default function App() {
                 onUpdateAccessProfiles={setAccessProfiles}
                 users={activeTenantUsers}
                 onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}`, tenantId: u.tenantId || activeTenantId }])}
-                onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
+                onDeleteUser={(id) => {
+                  setUsers(prev => prev.filter(u => u.id !== id));
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'users', id);
+                }}
                 onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? { ...u, tenantId: u.tenantId || item.tenantId || activeTenantId } : item))}
                 onAddLog={addAuditLog}
                 maxSuccursales={activeLicence?.nombre_succursales_max ?? 5}
@@ -1085,7 +1113,11 @@ export default function App() {
               <AdminModule 
                 users={activeTenantUsers}
                 onAddUser={(u) => setUsers(prev => [...prev, { ...u, id: `u_${Date.now()}`, tenantId: u.tenantId || activeTenantId }])}
-                onDeleteUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
+                onDeleteUser={(id) => {
+                  setUsers(prev => prev.filter(u => u.id !== id));
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'users', id);
+                }}
                 onUpdateUser={(u) => setUsers(prev => prev.map(item => item.id === u.id ? { ...u, tenantId: u.tenantId || item.tenantId || activeTenantId } : item))}
                 tenants={tenants}
                 onAddTenant={(name) => setTenants(prev => [...prev, { ...SOGESTI_CONFIG, id: `tenant_${Date.now()}`, companyName: name }])}
