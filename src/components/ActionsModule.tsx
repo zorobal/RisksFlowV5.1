@@ -16,10 +16,17 @@ import {
   Sliders,
   AlertTriangle,
   HelpCircle,
-  Trash2
+  Trash2,
+  Download,
+  Eye,
+  Building2,
+  X,
+  Info,
+  Layers
 } from 'lucide-react';
 import { ActionPlan, Risk, TenantConfig, User } from '../types';
-import { getCriticalityFromThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, getThresholdColorStyles } from '../utils/riskUtils';
+import UnitExecutiveReportModal from './UnitExecutiveReportModal';
 
 interface ActionsModuleProps {
   actions: ActionPlan[];
@@ -43,7 +50,14 @@ export default function ActionsModule({
   onAddLog
 }: ActionsModuleProps) {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Selected Action Detail Modal state
+  const [selectedActionDetail, setSelectedActionDetail] = useState<ActionPlan | null>(null);
+
+  // Executive Unit Synthesis PNG Export Modal state
+  const [showExecutiveReportModal, setShowExecutiveReportModal] = useState(false);
   
   // Single Create New Action Panel and form
   const [showCreate, setShowCreate] = useState(false);
@@ -198,7 +212,17 @@ export default function ActionsModule({
                         action.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         action.ownerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         action.riskId.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchStatus && matchSearch;
+
+    // Unit Filter
+    const parentRisk = risks.find(r => r.id === action.riskId);
+    let matchUnit = true;
+    if (selectedUnitFilter !== 'all') {
+      const uObj = tenantConfig.entities.find(e => e.id === selectedUnitFilter || e.name === selectedUnitFilter);
+      matchUnit = parentRisk?.entityId === selectedUnitFilter || 
+                  (!!uObj && (parentRisk?.entityId === uObj.id || parentRisk?.entityId === uObj.name));
+    }
+
+    return matchStatus && matchSearch && matchUnit;
   });
 
   const handleUpdateStatus = (action: ActionPlan, nextStatus: ActionPlan['status']) => {
@@ -271,7 +295,15 @@ export default function ActionsModule({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowExecutiveReportModal(true)}
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm text-xs border border-indigo-950"
+          >
+            <Download className="w-4 h-4 text-amber-400" />
+            <span>📸 Export PNG Unité (Direction Générale)</span>
+          </button>
+
           <button
             onClick={() => setShowBatchModal(true)}
             className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm text-xs"
@@ -579,20 +611,40 @@ export default function ActionsModule({
           
           {/* Filters Ribbon */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-            <div className="flex flex-wrap gap-1">
-              {['all', 'À planifier', 'En cours', 'Réalisé', 'Annulé'].map((st) => (
-                <button
-                  key={st}
-                  onClick={() => setSelectedStatusFilter(st)}
-                  className={`px-3 py-1.5 rounded-md text-[11px] font-bold border transition ${
-                    selectedStatusFilter === st 
-                      ? 'bg-indigo-600 text-white border-indigo-600' 
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-1">
+                {['all', 'À planifier', 'En cours', 'Réalisé', 'Annulé'].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setSelectedStatusFilter(st)}
+                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition ${
+                      selectedStatusFilter === st 
+                        ? 'bg-indigo-600 text-white border-indigo-600' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {st === 'all' ? '🔍 Tout voir' : st}
+                  </button>
+                ))}
+              </div>
+
+              {/* UNIT FILTER SELECTOR */}
+              <div className="flex items-center gap-1.5 bg-indigo-50/70 px-2.5 py-1 rounded-md border border-indigo-200">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="text-[10px] font-extrabold text-indigo-900 uppercase">Unité :</span>
+                <select
+                  value={selectedUnitFilter}
+                  onChange={(e) => setSelectedUnitFilter(e.target.value)}
+                  className="bg-white text-slate-900 font-bold text-xs rounded border border-indigo-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-600 cursor-pointer"
                 >
-                  {st === 'all' ? '🔍 Tout voir' : st}
-                </button>
-              ))}
+                  <option value="all">🏢 Toutes les Unités</option>
+                  {tenantConfig.entities.map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.code ? `[${e.code}] ` : ''}{e.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="relative">
@@ -602,7 +654,7 @@ export default function ActionsModule({
                 placeholder="Rechercher une action..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-xs text-slate-700 rounded pl-7 py-1.5 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-48"
+                className="bg-slate-50 border border-slate-200 text-xs text-slate-700 rounded pl-7 py-1.5 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-44"
               />
             </div>
           </div>
@@ -623,13 +675,24 @@ export default function ActionsModule({
                   >
                     <div className="space-y-2 flex-1">
                       {/* Badge Row */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[9px]">
-                          Action {action.id}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Lié au risque : <strong className="text-slate-600 hover:underline cursor-pointer">[{action.riskId}] {parentRisk?.title.substring(0, 45)}...</strong>
-                        </span>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[9px]">
+                            Action {action.id}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Lié au risque : <strong className="text-slate-600 hover:underline cursor-pointer">[{action.riskId}] {parentRisk?.title.substring(0, 45)}...</strong>
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => setSelectedActionDetail(action)}
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-md border border-indigo-200 transition text-[10px] flex items-center gap-1 cursor-pointer shadow-2xs"
+                          title="Afficher la fiche complète et le descriptif opérationnel"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>🔍 Fiche & Détails</span>
+                        </button>
                       </div>
 
                       {/* Title & Desc */}
@@ -878,6 +941,241 @@ export default function ActionsModule({
         </div>
 
       </div>
+
+      {/* POP-UP MODAL : FICHE DÉTAILLÉE DU PLAN D'ACTION (DESCRIPTIF OPÉRATIONNEL & SUIVI) */}
+      {selectedActionDetail && (() => {
+        const linkedRisk = risks.find(r => r.id === selectedActionDetail.riskId);
+        const linkedUnit = linkedRisk ? tenantConfig.entities.find(e => e.id === linkedRisk.entityId || e.name === linkedRisk.entityId) : null;
+        const netScore = linkedRisk ? (linkedRisk.scoreResiduel ?? linkedRisk.scoreBrut ?? 0) : 0;
+        const threshold = getCriticalityFromThresholds(netScore, tenantConfig.matrixThresholds || []);
+        const thresholdStyle = getThresholdColorStyles(threshold.label, tenantConfig.matrixThresholds || []);
+        const isOverdue = new Date(selectedActionDetail.dueDate) < new Date() && selectedActionDetail.progress < 100;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto animate-fade-in text-slate-800">
+              
+              {/* Modal Header */}
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-600 rounded-lg">
+                    <CheckSquare className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] font-bold bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40">
+                        ACTION {selectedActionDetail.id}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                        selectedActionDetail.priority === 'Critique' || selectedActionDetail.priority === 'Haute'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-slate-700 text-slate-200'
+                      }`}>
+                        Priorité : {selectedActionDetail.priority}
+                      </span>
+                    </div>
+                    <h3 className="font-extrabold text-sm text-white mt-1">
+                      {selectedActionDetail.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSelectedActionDetail(null)}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body Content */}
+              <div className="p-5 overflow-y-auto space-y-4">
+                
+                {/* Associated Risk & Unit Context Banner */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Contexte & Rapprochement du Risque :
+                  </span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-500 text-[10.5px]">Risque Lié :</span>
+                      <p className="font-bold text-slate-900 font-mono mt-0.5">
+                        [{selectedActionDetail.riskId}] {linkedRisk?.title || selectedActionDetail.riskId}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-500 text-[10.5px]">Unité Organisationnelle :</span>
+                      <p className="font-bold text-indigo-700 mt-0.5 flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5" />
+                        {linkedUnit?.name || linkedRisk?.entityId || 'Unité non spécifiée'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {linkedRisk && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60 text-[10px]">
+                      <span className="text-slate-500 font-medium">Catégorie : <strong>{tenantConfig.categories.find(c => c.id === linkedRisk.categoryId)?.name || linkedRisk.categoryId}</strong></span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-500 font-medium">Score Net : <strong className="font-mono text-indigo-900">{netScore}</strong></span>
+                      <span className="text-slate-300">•</span>
+                      <span 
+                        className="px-2 py-0.5 rounded font-bold uppercase text-[8.5px] border"
+                        style={{
+                          backgroundColor: thresholdStyle.bg,
+                          borderColor: thresholdStyle.border,
+                          color: thresholdStyle.text
+                        }}
+                      >
+                        {threshold.label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* OPERATIONAL DESCRIPTION BOX */}
+                <div className="p-4 bg-indigo-950 text-indigo-100 rounded-xl border border-indigo-900 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-indigo-800 pb-1.5">
+                    <h4 className="font-extrabold text-xs text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Info className="w-4 h-4 text-amber-400" />
+                      Descriptif Opérationnel de l'Action Corrective
+                    </h4>
+                    <span className="text-[9.5px] text-indigo-300 font-mono">Consignes Directives</span>
+                  </div>
+                  <p className="text-xs font-normal leading-relaxed whitespace-pre-wrap">
+                    {selectedActionDetail.description || "Aucun descriptif opérationnel complémentaire n'a été rédigé pour cette action."}
+                  </p>
+                </div>
+
+                {/* Responsible Owner, Due Date & Progress */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+                    <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Pilote d'Action</span>
+                    <span className="text-xs font-bold text-indigo-900 flex items-center gap-1">
+                      <UserIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      {selectedActionDetail.ownerName}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+                    <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Échéance de Réalisation</span>
+                    <span className={`text-xs font-bold font-mono flex items-center gap-1 ${isOverdue ? 'text-red-600 font-black' : 'text-slate-800'}`}>
+                      <Calendar className="w-3.5 h-3.5" />
+                      {selectedActionDetail.dueDate} {isOverdue ? '⚠️ (EN RETARD)' : ''}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
+                    <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">Statut Actuel</span>
+                    <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                      selectedActionDetail.status === 'Réalisé'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : selectedActionDetail.status === 'En cours'
+                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                        : 'bg-slate-100 text-slate-700 border'
+                    }`}>
+                      {selectedActionDetail.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Interactive Progress Slider */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-700 uppercase text-[10px] tracking-wider">Avancement du Chantier :</span>
+                    <span className="font-mono font-black text-indigo-600 text-sm">{selectedActionDetail.progress}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={selectedActionDetail.progress}
+                    onChange={(e) => handleUpdateProgressValue(selectedActionDetail, Number(e.target.value))}
+                    className="w-full accent-indigo-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-emerald-500 transition-all rounded-full" 
+                      style={{ width: `${selectedActionDetail.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Multi-step Approval Circuit */}
+                <div className="p-3.5 bg-white rounded-xl border border-slate-200 space-y-2">
+                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Circuit de Validation & Visa Hiérarchique :
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[9.5px]">
+                    {[
+                      { label: '1. Soumission', active: true },
+                      { label: '2. Validation N+1', active: selectedActionDetail.status !== 'À planifier' },
+                      { label: '3. Risk Manager', active: selectedActionDetail.status === 'Réalisé' || selectedActionDetail.progress > 50 },
+                      { label: '4. Clôture Vérifiée', active: selectedActionDetail.status === 'Réalisé' }
+                    ].map((step, idx) => (
+                      <div 
+                        key={idx}
+                        className={`p-2 rounded-lg font-bold text-center border transition ${
+                          step.active 
+                            ? 'bg-indigo-50 text-indigo-800 border-indigo-200' 
+                            : 'bg-slate-50 text-slate-400 border-slate-200'
+                        }`}
+                      >
+                        {step.active ? '✓' : '○'} {step.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick Action Status Change Buttons */}
+                <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-500">Changer Statut :</span>
+                    {(['À planifier', 'En cours', 'Réalisé', 'Annulé'] as const).map(st => (
+                      <button
+                        key={st}
+                        onClick={() => {
+                          handleUpdateStatus(selectedActionDetail, st);
+                          setSelectedActionDetail(prev => prev ? { ...prev, status: st, progress: st === 'Réalisé' ? 100 : prev.progress } : null);
+                        }}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold transition border ${
+                          selectedActionDetail.status === st 
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
+                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedActionDetail(null)}
+                    className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs cursor-pointer"
+                  >
+                    Fermer la Fiche
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL SYNTHÈSE EXECUTIVE PER UNIT (EXPORT PNG DIRECTION GÉNÉRALE) */}
+      <UnitExecutiveReportModal
+        isOpen={showExecutiveReportModal}
+        onClose={() => setShowExecutiveReportModal(false)}
+        tenantConfig={tenantConfig}
+        risks={risks}
+        actions={actions}
+        initialUnitId={selectedUnitFilter !== 'all' ? selectedUnitFilter : undefined}
+      />
+
     </div>
   );
 }
