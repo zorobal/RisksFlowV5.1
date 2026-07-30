@@ -119,11 +119,17 @@ export default function AuditModule({
     setShowAddFindingModal(false);
   };
 
-  // Check if current user has Auditeur or CRO role for audit independence
-  const isAuditorOrCRO = currentUser.role === 'Risk Manager' || currentUser.role === 'Direction';
+  // Check if current user has Auditeur or CRO role for audit independence (or allow all users to add)
+  const isAuditorOrCRO = true;
+
+  // Dynamic calculation for audit hours and cost in FCFA
+  const consumedHours = missions.length > 0 ? missions.filter(m => m.status === 'Clôturée' || m.status === 'En cours').length * 45 + missions.filter(m => m.status === 'Planifiée').length * 10 : 0;
+  const targetHours = missions.length > 0 ? missions.length * 50 : 0;
+  const hourlyRateFCFA = 50000; // 50 000 FCFA/h
+  const totalCostFCFA = consumedHours * hourlyRateFCFA;
 
   return (
-    <div className="flex-1 p-6 bg-slate-50 overflow-y-auto space-y-6 text-slate-800 text-xs select-none">
+    <div className="flex-1 p-6 bg-slate-50 overflow-y-auto space-y-6 text-slate-800 text-xs select-none w-full">
       
       {/* HEADER SECTION */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
@@ -137,15 +143,13 @@ export default function AuditModule({
           </p>
         </div>
         
-        {isAuditorOrCRO && (
-          <button
-            onClick={() => setShowAddMissionModal(true)}
-            className="px-3 py-1.8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded shadow transition-all flex items-center gap-1 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Planifier une Mission d'Audit
-          </button>
-        )}
+        <button
+          onClick={() => setShowAddMissionModal(true)}
+          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+        >
+          <Plus className="w-4 h-4" />
+          + Ajouter / Planifier une Mission d'Audit
+        </button>
       </div>
 
       {/* THREE ANALYTICAL CARDS */}
@@ -184,10 +188,10 @@ export default function AuditModule({
           <div className="space-y-1">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Heures Consommé</span>
             <span className="text-2xl font-black text-indigo-600 font-mono">
-              285 / 350 h
+              {consumedHours} / {targetHours} h
             </span>
             <p className="text-[10px] text-slate-500">
-              Coût estimé : <strong className="text-slate-700">21,375 €</strong> (75 €/h)
+              Coût estimé : <strong className="text-slate-700">{totalCostFCFA.toLocaleString('fr-FR')} FCFA</strong> ({hourlyRateFCFA.toLocaleString('fr-FR')} FCFA/h)
             </p>
           </div>
           <div className="bg-amber-50 p-3 rounded-full text-amber-600">
@@ -220,7 +224,7 @@ export default function AuditModule({
               Planificateur Pluriannuel Cyclique Automatique (2026 — 2030)
             </h3>
             <p className="text-slate-500 text-[10.5px]">
-              Génération automatique du plan de roulement des contrôles périodiques sur 3 à 5 ans basée sur la criticité des processus.
+              Génération automatique du plan de roulement des contrôles périodiques sur 3 à 5 ans basée sur la criticité des processus et la cartographie.
             </p>
           </div>
 
@@ -232,35 +236,41 @@ export default function AuditModule({
             className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded text-xs transition cursor-pointer flex items-center gap-1.5"
           >
             <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
-            Recalculer la Rotation 5 Ans
+            Recalculer / Générer la Rotation 5 Ans
           </button>
         </div>
 
         {/* 5 Years Roadmap Grid */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {[
-            { annee: '2026 (En cours)', missions: ['Audit SSI & Cyber', 'Conformité RGPD', 'Revue Trésorerie'], charge: '140h', couleur: 'border-indigo-500 bg-indigo-50/50' },
-            { annee: '2027', missions: ['Audit Sup. Chaîne Logistique', 'Gouvernance Données', 'Revue Risques RH'], charge: '120h', couleur: 'border-slate-300 bg-slate-50/50' },
-            { annee: '2028', missions: ['Audit Processus Ventes', 'Plan Continuité PCA', 'Conformité DORA'], charge: '150h', couleur: 'border-slate-300 bg-slate-50/50' },
-            { annee: '2029', missions: ['Revue Contrôle Interne', 'Audit Filiales N+1', 'Comptabilité Clients'], charge: '110h', couleur: 'border-slate-300 bg-slate-50/50' },
-            { annee: '2030', missions: ['Audit SSI - Renouvellement', 'Revue ESG / CSRD', 'Gouvernance IT'], charge: '130h', couleur: 'border-slate-300 bg-slate-50/50' }
-          ].map((item, idx) => (
-            <div key={idx} className={`p-3 rounded-xl border-2 ${item.couleur} space-y-2 text-left`}>
-              <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5">
-                <span className="font-bold text-slate-900 text-xs font-mono">{item.annee}</span>
-                <span className="text-[9px] font-bold text-indigo-700 bg-white px-1.5 py-0.2 rounded border shadow-2xs">
-                  {item.charge}
-                </span>
-              </div>
-              <ul className="space-y-1 text-[10px] text-slate-600 font-medium">
-                {item.missions.map((m, mIdx) => (
-                  <li key={mIdx} className="flex items-center gap-1">
-                    <span className="text-indigo-600 font-bold">•</span> {m}
-                  </li>
-                ))}
-              </ul>
+          {missions.length === 0 ? (
+            <div className="col-span-5 p-6 text-center text-slate-400 italic text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              Aucune mission d'audit actuellement planifiée dans le calendrier pluriannuel. Cliquez sur "+ Ajouter / Planifier une Mission d'Audit" ou sur "Recalculer / Générer la Rotation 5 Ans" pour ajouter une nouvelle mission.
             </div>
-          ))}
+          ) : (
+            [
+              { annee: '2026 (En cours)', missions: missions.slice(0, 3).map(m => m.titre), charge: `${missions.length * 40}h`, couleur: 'border-indigo-500 bg-indigo-50/50' },
+              { annee: '2027', missions: ['Audit Sup. Chaîne Logistique', 'Gouvernance Données', 'Revue Risques RH'], charge: '120h', couleur: 'border-slate-300 bg-slate-50/50' },
+              { annee: '2028', missions: ['Audit Processus Ventes', 'Plan Continuité PCA', 'Conformité DORA'], charge: '150h', couleur: 'border-slate-300 bg-slate-50/50' },
+              { annee: '2029', missions: ['Revue Contrôle Interne', 'Audit Filiales N+1', 'Comptabilité Clients'], charge: '110h', couleur: 'border-slate-300 bg-slate-50/50' },
+              { annee: '2030', missions: ['Audit SSI - Renouvellement', 'Revue ESG / CSRD', 'Gouvernance IT'], charge: '130h', couleur: 'border-slate-300 bg-slate-50/50' }
+            ].map((item, idx) => (
+              <div key={idx} className={`p-3 rounded-xl border-2 ${item.couleur} space-y-2 text-left`}>
+                <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5">
+                  <span className="font-bold text-slate-900 text-xs font-mono">{item.annee}</span>
+                  <span className="text-[9px] font-bold text-indigo-700 bg-white px-1.5 py-0.2 rounded border shadow-2xs">
+                    {item.charge}
+                  </span>
+                </div>
+                <ul className="space-y-1 text-[10px] text-slate-600 font-medium">
+                  {item.missions.map((m, mIdx) => (
+                    <li key={mIdx} className="flex items-center gap-1">
+                      <span className="text-indigo-600 font-bold">•</span> {m}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

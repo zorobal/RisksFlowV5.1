@@ -3168,83 +3168,95 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                 </h4>
                 
                 {/* 5-Step Progress Stepper representing risk lifecycle */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between relative">
-                    
-                    {/* Stepper background track line */}
-                    <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-1 bg-slate-200 z-0"></div>
-                    
-                    {/* Active track line overlay */}
-                    <div 
-                      className="absolute left-6 top-1/2 -translate-y-1/2 h-1 bg-indigo-600 z-0 transition-all duration-500"
-                      style={{ 
-                        width: selectedRisk.statusId === 'Clôturé' ? '100%' : selectedRisk.statusId === 'Approuvé' ? '75%' : selectedRisk.statusId === 'Évalué' ? '50%' : selectedRisk.statusId === 'Identifié' ? '25%' : '0%' 
-                      }}
-                    ></div>
+                {(() => {
+                  const getStepNumber = (statusId?: string) => {
+                    const s = (statusId || '').toLowerCase();
+                    if (s.includes('clot') || s.includes('clôt') || s.includes('sous') || s.includes('controle') || s.includes('contrôle')) return 5;
+                    if (s.includes('approuv') || s.includes('valid') || s.includes('w_approuve') || s.includes('w_validation')) return 4;
+                    if (s.includes('evalu') || s.includes('évalu') || s.includes('w_evaluation')) return 3;
+                    if (s.includes('identif') || s.includes('w_identifie')) return 2;
+                    return 1;
+                  };
+                  const stepNum = getStepNumber(selectedRisk.statusId);
+                  const trackWidth = stepNum >= 5 ? '100%' : stepNum === 4 ? '75%' : stepNum === 3 ? '50%' : stepNum === 2 ? '25%' : '0%';
 
-                    {/* Step 1: Brouillon */}
-                    <div className="z-10 flex flex-col items-center">
-                      <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm">
-                        <Check className="w-3 h-3" />
+                  return (
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Étape actuelle du Workflow</span>
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          {stepNum === 5 ? '5/5 — Sous-contrôle / Clôturé' : stepNum === 4 ? '4/5 — Approuvé (Validé DG)' : stepNum === 3 ? '3/5 — Évalué (Coté)' : stepNum === 2 ? '2/5 — Identifié (Consolidé)' : '1/5 — Brouillon (Initié)'}
+                        </span>
                       </div>
-                      <span className="text-[9.5px] font-bold text-slate-700 mt-1">Brouillon</span>
-                      <span className="text-[8px] text-slate-400 font-mono">Initié</span>
-                    </div>
 
-                    {/* Step 2: Identifié */}
-                    <div className="z-10 flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
-                        ['Identifié', 'Évalué', 'Approuvé', 'Clôturé'].includes(selectedRisk.statusId)
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-200 text-slate-400'
-                      }`}>
-                        {['Évalué', 'Approuvé', 'Clôturé'].includes(selectedRisk.statusId) ? <Check className="w-3 h-3" /> : '2'}
+                      <div className="flex items-center justify-between relative mt-2">
+                        
+                        {/* Stepper background track line */}
+                        <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-1 bg-slate-200 z-0"></div>
+                        
+                        {/* Active track line overlay */}
+                        <div 
+                          className="absolute left-6 top-1/2 -translate-y-1/2 h-1 bg-indigo-600 z-0 transition-all duration-500"
+                          style={{ width: trackWidth }}
+                        ></div>
+
+                        {/* Step 1: Brouillon */}
+                        <div className="z-10 flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm">
+                            <Check className="w-3 h-3" />
+                          </div>
+                          <span className="text-[9.5px] font-bold text-slate-700 mt-1">Brouillon</span>
+                          <span className="text-[8px] text-slate-400 font-mono">Initié</span>
+                        </div>
+
+                        {/* Step 2: Identifié */}
+                        <div className="z-10 flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
+                            stepNum >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            {stepNum > 2 ? <Check className="w-3 h-3" /> : '2'}
+                          </div>
+                          <span className={`text-[9.5px] font-bold mt-1 ${stepNum >= 2 ? 'text-slate-700' : 'text-slate-400'}`}>Identifié</span>
+                          <span className="text-[8px] text-slate-400 font-mono">Consolidé</span>
+                        </div>
+
+                        {/* Step 3: Évalué */}
+                        <div className="z-10 flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
+                            stepNum >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            {stepNum > 3 ? <Check className="w-3 h-3" /> : '3'}
+                          </div>
+                          <span className={`text-[9.5px] font-bold mt-1 ${stepNum >= 3 ? 'text-slate-700' : 'text-slate-400'}`}>Évalué</span>
+                          <span className="text-[8px] text-slate-400 font-mono">Coté</span>
+                        </div>
+
+                        {/* Step 4: Approuvé */}
+                        <div className="z-10 flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
+                            stepNum >= 4 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            {stepNum > 4 ? <Check className="w-3 h-3" /> : '4'}
+                          </div>
+                          <span className={`text-[9.5px] font-bold mt-1 ${stepNum >= 4 ? 'text-emerald-600' : 'text-slate-400'}`}>Approuvé</span>
+                          <span className="text-[8px] text-slate-400 font-mono">Validé DG</span>
+                        </div>
+
+                        {/* Step 5: Traité / Clôturé / Sous-contrôle */}
+                        <div className="z-10 flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
+                            stepNum >= 5 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            {stepNum >= 5 ? <Check className="w-3 h-3" /> : '5'}
+                          </div>
+                          <span className={`text-[9.5px] font-bold mt-1 ${stepNum >= 5 ? 'text-emerald-700 font-extrabold' : 'text-slate-400'}`}>Sous-contrôle</span>
+                          <span className="text-[8px] text-slate-400 font-mono">Clôturé</span>
+                        </div>
+
                       </div>
-                      <span className={`text-[9.5px] font-bold mt-1 ${['Identifié', 'Évalué', 'Approuvé', 'Clôturé'].includes(selectedRisk.statusId) ? 'text-slate-700' : 'text-slate-400'}`}>Identifié</span>
-                      <span className="text-[8px] text-slate-400 font-mono">Consolidé</span>
                     </div>
-
-                    {/* Step 3: Évalué */}
-                    <div className="z-10 flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
-                        ['Évalué', 'Approuvé', 'Clôturé'].includes(selectedRisk.statusId)
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-200 text-slate-400'
-                      }`}>
-                        {['Approuvé', 'Clôturé'].includes(selectedRisk.statusId) ? <Check className="w-3 h-3" /> : '3'}
-                      </div>
-                      <span className={`text-[9.5px] font-bold mt-1 ${['Évalué', 'Approuvé', 'Clôturé'].includes(selectedRisk.statusId) ? 'text-slate-700' : 'text-slate-400'}`}>Évalué</span>
-                      <span className="text-[8px] text-slate-400 font-mono">Coté</span>
-                    </div>
-
-                    {/* Step 4: Approuvé */}
-                    <div className="z-10 flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
-                        ['Approuvé', 'Clôturé'].includes(selectedRisk.statusId)
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-slate-200 text-slate-400'
-                      }`}>
-                        {['Clôturé'].includes(selectedRisk.statusId) ? <Check className="w-3 h-3" /> : '4'}
-                      </div>
-                      <span className={`text-[9.5px] font-bold mt-1 ${['Approuvé', 'Clôturé'].includes(selectedRisk.statusId) ? 'text-emerald-600' : 'text-slate-400'}`}>Approuvé</span>
-                      <span className="text-[8px] text-slate-400 font-mono">Validé DG</span>
-                    </div>
-
-                    {/* Step 5: Traité / Clôturé */}
-                    <div className="z-10 flex flex-col items-center">
-                      <div className={`w-7 h-7 rounded-full font-extrabold flex items-center justify-center border-4 border-white text-[10px] shadow-sm transition-all ${
-                        selectedRisk.statusId === 'Clôturé'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-200 text-slate-400'
-                      }`}>
-                        {selectedRisk.statusId === 'Clôturé' ? <Check className="w-3 h-3" /> : '5'}
-                      </div>
-                      <span className={`text-[9.5px] font-bold mt-1 ${selectedRisk.statusId === 'Clôturé' ? 'text-emerald-700 font-extrabold' : 'text-slate-400'}`}>Sous-contrôle</span>
-                      <span className="text-[8px] text-slate-400 font-mono">Clôturé</span>
-                    </div>
-
-                  </div>
-                </div>
+                  );
+                })()}
 
                 <div className="p-3 bg-white border border-slate-200 rounded-lg flex items-start gap-2 text-[10.5px] text-slate-500 leading-relaxed mt-2">
                   <Info className="w-4 h-4 text-indigo-650 shrink-0 mt-0.5" />

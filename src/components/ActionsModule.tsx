@@ -44,7 +44,7 @@ export default function ActionsModule({
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Create New Action Panel and form
+  // Single Create New Action Panel and form
   const [showCreate, setShowCreate] = useState(false);
   const [formRiskId, setFormRiskId] = useState(risks[0]?.id || '');
   const [formTitle, setFormTitle] = useState('');
@@ -52,6 +52,96 @@ export default function ActionsModule({
   const [formOwner, setFormOwner] = useState('');
   const [formDueDate, setFormDueDate] = useState('');
   const [formPriority, setFormPriority] = useState<'Basse' | 'Moyenne' | 'Haute' | 'Critique'>('Moyenne');
+
+  // Unit-Centric Batch Action Creation state
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(tenantConfig.entities[0]?.id || tenantConfig.entities[0]?.name || '');
+  const [selectedBatchRiskId, setSelectedBatchRiskId] = useState<string>('');
+  
+  // Single action form fields inside batch workflow
+  const [batchActionTitle, setBatchActionTitle] = useState('');
+  const [batchActionDesc, setBatchActionDesc] = useState('');
+  const [batchActionOwner, setBatchActionOwner] = useState('');
+  const [batchActionDueDate, setBatchActionDueDate] = useState('');
+  const [batchActionPriority, setBatchActionPriority] = useState<'Basse' | 'Moyenne' | 'Haute' | 'Critique'>('Moyenne');
+
+  // Staged basket of actions for the selected unit
+  interface StagedAction {
+    tempId: string;
+    riskId: string;
+    riskTitle: string;
+    title: string;
+    description: string;
+    ownerName: string;
+    dueDate: string;
+    priority: 'Basse' | 'Moyenne' | 'Haute' | 'Critique';
+  }
+  const [stagedActions, setStagedActions] = useState<StagedAction[]>([]);
+
+  // Get risks belonging to selected unit
+  const unitRisks = risks.filter(r => {
+    if (!selectedUnitId) return true;
+    const unitObj = tenantConfig.entities.find(e => e.id === selectedUnitId || e.name === selectedUnitId);
+    return r.entityId === selectedUnitId || r.entityId === unitObj?.id || r.entityId === unitObj?.name;
+  });
+
+  // Automatically update selectedBatchRiskId when unit changes
+  React.useEffect(() => {
+    if (unitRisks.length > 0 && !unitRisks.some(r => r.id === selectedBatchRiskId)) {
+      setSelectedBatchRiskId(unitRisks[0].id);
+    }
+  }, [selectedUnitId, unitRisks]);
+
+  const handleStageAction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchActionTitle.trim() || !selectedBatchRiskId) return;
+
+    const targetRisk = risks.find(r => r.id === selectedBatchRiskId);
+    const newStaged: StagedAction = {
+      tempId: `staged_${Date.now()}_${Math.random()}`,
+      riskId: selectedBatchRiskId,
+      riskTitle: targetRisk?.title || selectedBatchRiskId,
+      title: batchActionTitle,
+      description: batchActionDesc,
+      ownerName: batchActionOwner || users[0]?.name || 'Marie-Thérèse Atangana',
+      dueDate: batchActionDueDate || new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+      priority: batchActionPriority
+    };
+
+    setStagedActions(prev => [...prev, newStaged]);
+
+    // Reset action inputs to allow adding another action for same risk or choosing another risk
+    setBatchActionTitle('');
+    setBatchActionDesc('');
+  };
+
+  const handleRemoveStagedAction = (tempId: string) => {
+    setStagedActions(prev => prev.filter(a => a.tempId !== tempId));
+  };
+
+  const handleCommitBatchActions = () => {
+    if (stagedActions.length === 0) return;
+
+    stagedActions.forEach(staged => {
+      onAddActionPlan({
+        riskId: staged.riskId,
+        title: staged.title,
+        description: staged.description,
+        ownerName: staged.ownerName,
+        dueDate: staged.dueDate,
+        priority: staged.priority,
+        status: 'À planifier'
+      });
+    });
+
+    const unitObj = tenantConfig.entities.find(e => e.id === selectedUnitId || e.name === selectedUnitId);
+    const unitName = unitObj?.name || selectedUnitId || 'Unité';
+    onAddLog('Planification d\'Actions par Unité', `${stagedActions.length} plan(s) d'action enregistré(s) avec succès pour l'unité organisationnelle "${unitName}".`);
+    
+    alert(`✅ ${stagedActions.length} plan(s) d'action enregistré(s) avec succès pour l'unité "${unitName}" !`);
+    setStagedActions([]);
+    setShowBatchModal(false);
+  };
 
   // Filter actions
   const filteredActions = actions.filter(action => {
@@ -133,14 +223,270 @@ export default function ActionsModule({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold transition-all flex items-center gap-1 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Planifier un plan d'action
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBatchModal(true)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm text-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Saisie / Planification par Unité (Multi-Risques)</span>
+          </button>
+        </div>
       </div>
+
+      {/* MODAL WORKFLOW: PLANIFICATION PAR UNITÉ ORGANISATIONNELLE (MULTI-RISQUES & MULTI-ACTIONS) */}
+      {showBatchModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600 rounded-lg">
+                  <Sliders className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
+                    Planification des Actions Correctives par Unité Organisationnelle
+                  </h3>
+                  <p className="text-[10.5px] text-slate-300">
+                    Sélectionnez une unité, parcourez ses risques identifiés et préparez un ou plusieurs plans d'actions par risque avant enregistrement global.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (stagedActions.length === 0 || window.confirm("Des actions sont en cours de préparation dans votre panier. Voulez-vous vraiment fermer ?")) {
+                    setShowBatchModal(false);
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-5 flex-1 bg-slate-50">
+              
+              {/* STEP 1: CHOICE OF UNIT */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <label className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                    1. Sélectionner l'Unité Organisationnelle
+                  </label>
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">
+                    {unitRisks.length} risque(s) identifié(s) rattaché(s)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                  {tenantConfig.entities.map((unit) => {
+                    const count = risks.filter(r => r.entityId === unit.id || r.entityId === unit.name).length;
+                    const isSelected = selectedUnitId === unit.id || selectedUnitId === unit.name;
+                    return (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        onClick={() => setSelectedUnitId(unit.id)}
+                        className={`p-3 rounded-lg border text-left transition flex justify-between items-center cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-500/20 text-indigo-900 font-bold'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 block">{unit.code}</span>
+                          <span className="text-xs">{unit.name}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          {count} risque(s)
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* STEP 2 & 3: PICK RISK & ADD ACTIONS */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                
+                {/* Form to add action for selected risk */}
+                <div className="lg:col-span-7 bg-white p-4.5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                  <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      2. Choisir un Risque & Ajouter son/ses Plan(s) d'Action
+                    </h4>
+                  </div>
+
+                  <form onSubmit={handleStageAction} className="space-y-3">
+                    {/* Risk Selector within Unit */}
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-700">Risque de la structure :</label>
+                      <select
+                        value={selectedBatchRiskId}
+                        onChange={(e) => setSelectedBatchRiskId(e.target.value)}
+                        required
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      >
+                        {unitRisks.length === 0 ? (
+                          <option value="">Aucun risque répertorié pour cette unité</option>
+                        ) : (
+                          unitRisks.map(r => (
+                            <option key={r.id} value={r.id}>
+                              [{r.id}] {r.title} (Score Résiduel : {r.scoreResiduel ?? r.scoreBrut ?? 0})
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Action Title */}
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-700">Intitulé du Plan d'Action :</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Mise à niveau de l'infrastructure de sauvegarde..."
+                        value={batchActionTitle}
+                        onChange={(e) => setBatchActionTitle(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Action Description */}
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-700">Description Opérationnelle :</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Modalités de déploiement, moyens nécessaires..."
+                        value={batchActionDesc}
+                        onChange={(e) => setBatchActionDesc(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Owner & Due Date */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10.5px] font-bold text-slate-700">Pilote d'Action :</label>
+                        <select
+                          value={batchActionOwner}
+                          onChange={(e) => setBatchActionOwner(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-medium"
+                        >
+                          {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10.5px] font-bold text-slate-700">Échéance cible :</label>
+                        <input
+                          type="date"
+                          value={batchActionDueDate}
+                          onChange={(e) => setBatchActionDueDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Priority */}
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-bold text-slate-700">Priorité :</label>
+                      <select
+                        value={batchActionPriority}
+                        onChange={(e) => setBatchActionPriority(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-bold"
+                      >
+                        <option value="Basse">🟢 Basse</option>
+                        <option value="Moyenne">🔵 Moyenne</option>
+                        <option value="Haute">🟡 Haute</option>
+                        <option value="Critique">🔴 Critique</option>
+                      </select>
+                    </div>
+
+                    {/* Validate & Add to Basket Button */}
+                    <button
+                      type="submit"
+                      disabled={!batchActionTitle.trim() || !selectedBatchRiskId}
+                      className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 text-slate-950 font-extrabold rounded-lg shadow-sm transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      + Valider & Ajouter l'Action au Panier de l'Unité
+                    </button>
+                  </form>
+                </div>
+
+                {/* Basket of Staged Actions for this Unit */}
+                <div className="lg:col-span-5 bg-white p-4.5 rounded-xl border border-slate-200 shadow-2xs space-y-3 flex flex-col justify-between h-full min-h-[350px]">
+                  <div className="space-y-3">
+                    <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        3. Panier des Actions Préparées ({stagedActions.length})
+                      </h4>
+                    </div>
+
+                    {stagedActions.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 italic text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        Aucune action préparée pour l'instant dans cette session. Sélectionnez un risque à gauche et cliquez sur "+ Valider & Ajouter".
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                        {stagedActions.map((staged, idx) => (
+                          <div 
+                            key={staged.tempId}
+                            className="p-3 bg-slate-50 hover:bg-slate-100/70 rounded-lg border border-slate-200 space-y-1.5 relative group transition"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-[9.5px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                #{idx + 1} • {staged.riskId}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStagedAction(staged.tempId)}
+                                className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition cursor-pointer"
+                                title="Retirer cette action du panier"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <h5 className="font-bold text-slate-900 text-xs leading-snug">{staged.title}</h5>
+                            <p className="text-[10px] text-slate-500 line-clamp-1">{staged.riskTitle}</p>
+                            <div className="flex items-center justify-between text-[9.5px] text-slate-500 font-medium pt-1 border-t border-slate-200/60">
+                              <span>Pilote : {staged.ownerName}</span>
+                              <span className="font-mono text-red-600 font-bold">{staged.dueDate}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Commit Save Button */}
+                  <div className="pt-3 border-t border-slate-200 space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleCommitBatchActions}
+                      disabled={stagedActions.length === 0}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-extrabold rounded-lg shadow-md transition text-xs flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      💾 Valider & Enregistrer Définitivement les {stagedActions.length} Action(s) de l'Unité
+                    </button>
+                    <p className="text-[9.5px] text-slate-400 text-center italic">
+                      Toutes les actions préparées seront rattachées aux risques correspondants de cette unité.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OVERDUE REMINDER AUTOMATION PANEL */}
       <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900">

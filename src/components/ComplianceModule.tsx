@@ -144,7 +144,7 @@ export default function ComplianceModule({
     <div className="flex-1 p-6 bg-slate-50 overflow-y-auto space-y-6 text-slate-800 text-xs select-none">
       
       {/* HEADER RIBBON */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white rounded-lg shadow-sm border border-slate-200 w-full">
         <div className="space-y-1">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <Award className="w-5 h-5 text-indigo-600 animate-spin" style={{ animationDuration: '10s' }} />
@@ -155,23 +155,33 @@ export default function ComplianceModule({
           </p>
         </div>
         
-        <div className="flex bg-slate-150 p-0.5 rounded border border-slate-200 shrink-0">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => setActiveTab('frameworks')}
-            className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-              activeTab === 'frameworks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
+            onClick={() => setShowFwModal(true)}
+            className="px-3.5 py-1.8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm text-xs cursor-pointer flex items-center gap-1.5 transition-all"
           >
-            📋 Référentiels & Obligations
+            <Plus className="w-4 h-4" />
+            + Ajouter un Référentiel (Applicatif / Réglementaire)
           </button>
-          <button
-            onClick={() => setActiveTab('incidents')}
-            className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-              activeTab === 'incidents' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            🚨 Incidents & Déclarations
-          </button>
+
+          <div className="flex bg-slate-150 p-0.5 rounded border border-slate-200 shrink-0">
+            <button
+              onClick={() => setActiveTab('frameworks')}
+              className={`px-3 py-1 text-xs font-bold rounded transition-all ${
+                activeTab === 'frameworks' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              📋 Référentiels & Obligations
+            </button>
+            <button
+              onClick={() => setActiveTab('incidents')}
+              className={`px-3 py-1 text-xs font-bold rounded transition-all ${
+                activeTab === 'incidents' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🚨 Incidents & Déclarations
+            </button>
+          </div>
         </div>
       </div>
 
@@ -289,10 +299,11 @@ export default function ComplianceModule({
               <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wide">Bibliothèque Normative</h3>
               <button
                 onClick={() => setShowFwModal(true)}
-                className="p-1 hover:bg-slate-100 rounded text-indigo-600"
-                title="Ajouter un référentiel"
+                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded text-[10.5px] flex items-center gap-1 cursor-pointer"
+                title="Ajouter un référentiel applicatif ou réglementaire"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Ajouter</span>
               </button>
             </div>
 
