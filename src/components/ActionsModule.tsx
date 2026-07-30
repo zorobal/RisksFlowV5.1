@@ -19,6 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { ActionPlan, Risk, TenantConfig, User } from '../types';
+import { getCriticalityFromThresholds } from '../utils/riskUtils';
 
 interface ActionsModuleProps {
   actions: ActionPlan[];
@@ -85,12 +86,59 @@ export default function ActionsModule({
     return r.entityId === selectedUnitId || r.entityId === unitObj?.id || r.entityId === unitObj?.name;
   });
 
+  // Helper to map risk criticality threshold (Faible, Moyen, Élevé, Très Élevé / Critique) to action priority automatically
+  const getPriorityFromRisk = (targetRisk?: Risk): 'Basse' | 'Moyenne' | 'Haute' | 'Critique' => {
+    if (!targetRisk) return 'Moyenne';
+    const score = targetRisk.scoreResiduel ?? targetRisk.scoreBrut ?? 0;
+    const threshold = getCriticalityFromThresholds(score, tenantConfig.matrixThresholds || []);
+    const label = (threshold.label || '').toLowerCase();
+
+    if (label.includes('faible') || label.includes('bas') || label.includes('négligeable') || label.includes('mineur')) {
+      return 'Basse';
+    }
+    if (label.includes('moyen') || label.includes('modéré') || label.includes('médium') || label.includes('significatif')) {
+      return 'Moyenne';
+    }
+    if (label.includes('très élevé') || label.includes('tres eleve') || label.includes('critique') || label.includes('catastrophique') || label.includes('majeur')) {
+      return 'Critique';
+    }
+    if (label.includes('élevé') || label.includes('eleve') || label.includes('haut')) {
+      return 'Haute';
+    }
+
+    // Default fallback by score if custom label is unrecognized
+    if (score <= 4) return 'Basse';
+    if (score <= 9) return 'Moyenne';
+    if (score <= 15) return 'Haute';
+    return 'Critique';
+  };
+
   // Automatically update selectedBatchRiskId when unit changes
   React.useEffect(() => {
     if (unitRisks.length > 0 && !unitRisks.some(r => r.id === selectedBatchRiskId)) {
       setSelectedBatchRiskId(unitRisks[0].id);
     }
   }, [selectedUnitId, unitRisks]);
+
+  // Automatically update batchActionPriority according to selected risk's criticality threshold
+  React.useEffect(() => {
+    if (selectedBatchRiskId) {
+      const targetRisk = risks.find(r => r.id === selectedBatchRiskId);
+      if (targetRisk) {
+        setBatchActionPriority(getPriorityFromRisk(targetRisk));
+      }
+    }
+  }, [selectedBatchRiskId, risks, tenantConfig.matrixThresholds]);
+
+  // Automatically update single formPriority according to selected risk's criticality threshold
+  React.useEffect(() => {
+    if (formRiskId) {
+      const targetRisk = risks.find(r => r.id === formRiskId);
+      if (targetRisk) {
+        setFormPriority(getPriorityFromRisk(targetRisk));
+      }
+    }
+  }, [formRiskId, risks, tenantConfig.matrixThresholds]);
 
   const handleStageAction = (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,17 +442,25 @@ export default function ActionsModule({
 
                     {/* Priority */}
                     <div className="space-y-1">
-                      <label className="text-[10.5px] font-bold text-slate-700">Priorité :</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10.5px] font-bold text-slate-700">Priorité de l'action :</label>
+                        <span className="text-[9.5px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                          ⚡ Auto (Seuil Configuration)
+                        </span>
+                      </div>
                       <select
                         value={batchActionPriority}
                         onChange={(e) => setBatchActionPriority(e.target.value as any)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 text-xs font-bold"
                       >
-                        <option value="Basse">🟢 Basse</option>
-                        <option value="Moyenne">🔵 Moyenne</option>
-                        <option value="Haute">🟡 Haute</option>
-                        <option value="Critique">🔴 Critique</option>
+                        <option value="Basse">🟢 Basse (Criticité Faible)</option>
+                        <option value="Moyenne">🔵 Moyenne (Criticité Moyenne)</option>
+                        <option value="Haute">🟡 Haute (Criticité Élevée)</option>
+                        <option value="Critique">🔴 Critique (Criticité Très Élevée / Critique)</option>
                       </select>
+                      <p className="text-[9px] text-slate-400 italic">
+                        Alignée automatiquement sur la graduation & seuils de criticité du risque choisie dans la Configuration.
+                      </p>
                     </div>
 
                     {/* Validate & Add to Basket Button */}
@@ -771,16 +827,21 @@ export default function ActionsModule({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase">Niveau d'Urgence / Priorité</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Niveau d'Urgence / Priorité</label>
+                    <span className="text-[9px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                      ⚡ Automatique (Criticité)
+                    </span>
+                  </div>
                   <select
                     value={formPriority}
                     onChange={(e) => setFormPriority(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-700 text-xs font-bold"
                   >
-                    <option value="Basse">🟢 Basse</option>
-                    <option value="Moyenne">🔵 Moyenne</option>
-                    <option value="Haute">🟡 Haute</option>
-                    <option value="Critique">🔴 Critique</option>
+                    <option value="Basse">🟢 Basse (Criticité Faible)</option>
+                    <option value="Moyenne">🔵 Moyenne (Criticité Moyenne)</option>
+                    <option value="Haute">🟡 Haute (Criticité Élevée)</option>
+                    <option value="Critique">🔴 Critique (Criticité Très Élevée / Critique)</option>
                   </select>
                 </div>
 
