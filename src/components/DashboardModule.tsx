@@ -63,6 +63,7 @@ export default function DashboardModule({
   
   // Selected Risk for Multi-level Detailed Drill-down
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(null);
+  const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
 
   // Search filter for active risks panel
   const [riskSearchQuery, setRiskSearchQuery] = useState<string>('');
@@ -3382,54 +3383,84 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
                       Aucun plan de remédiation actif défini pour ce risque.
                     </div>
                   ) : (
-                    selectedRiskActions.map(action => (
-                      <div 
-                        key={action.id}
-                        className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2.5 hover:border-slate-350 hover:shadow-xs transition-all font-medium"
-                      >
-                        <div className="flex justify-between items-start gap-1">
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${
-                            action.priority === 'Critique' || action.priority === 'Haute'
-                              ? 'bg-red-50 text-red-650 border border-red-100'
-                              : 'bg-slate-100 text-slate-600 border'
-                          }`}>
-                            Prio : {action.priority}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
-                            action.status === 'Réalisé'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                              : action.status === 'En cours'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                              : 'bg-slate-100 text-slate-500 border'
-                          }`}>
-                            {action.status}
-                          </span>
-                        </div>
-
-                        <h5 className="font-bold text-slate-900 text-[11.5px] leading-snug">
-                          {action.title}
-                        </h5>
-
-                        {/* Progress Bar */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase">
-                            <span>Avancement</span>
-                            <span className="font-mono">{action.progress}%</span>
+                    selectedRiskActions.map(action => {
+                      const isExpanded = expandedActionId === action.id;
+                      return (
+                        <div 
+                          key={action.id}
+                          onClick={() => setExpandedActionId(isExpanded ? null : action.id)}
+                          className={`p-3.5 bg-white border rounded-xl space-y-2.5 transition-all font-medium cursor-pointer ${
+                            isExpanded ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md bg-indigo-50/20' : 'border-slate-200 hover:border-slate-350 hover:shadow-xs'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-1">
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                              action.priority === 'Critique' || action.priority === 'Haute'
+                                ? 'bg-red-50 text-red-650 border border-red-100'
+                                : 'bg-slate-100 text-slate-600 border'
+                            }`}>
+                              Prio : {action.priority}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                                action.status === 'Réalisé'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                  : action.status === 'En cours'
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                                  : 'bg-slate-100 text-slate-500 border'
+                              }`}>
+                                {action.status}
+                              </span>
+                              <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
+                                isExpanded ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                              }`}>
+                                {isExpanded ? '▲ Réduire' : '▼ Description Opérationnelle'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-emerald-500 rounded-full transition-all"
-                              style={{ width: `${action.progress}%` }}
-                            ></div>
+
+                          <h5 className="font-bold text-slate-900 text-[11.5px] leading-snug">
+                            {action.title}
+                          </h5>
+
+                          {/* Operational Description Box */}
+                          <div className={`p-2.5 rounded-lg border text-[10.5px] leading-relaxed transition-all ${
+                            isExpanded 
+                              ? 'bg-indigo-950 text-indigo-100 border-indigo-800 shadow-sm' 
+                              : 'bg-slate-50 text-slate-700 border-slate-200/80'
+                          }`}>
+                            <div className={`flex items-center gap-1.5 font-bold mb-1 border-b pb-1 text-[9.5px] uppercase tracking-wider ${
+                              isExpanded ? 'border-indigo-800 text-amber-300' : 'border-slate-200 text-indigo-800'
+                            }`}>
+                              <Info className="w-3 h-3 shrink-0" />
+                              <span>Description Opérationnelle :</span>
+                            </div>
+                            <p className="font-normal text-[10.5px] whitespace-pre-wrap">
+                              {action.description || "Aucune description opérationnelle renseignée."}
+                            </p>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase">
+                              <span>Avancement</span>
+                              <span className="font-mono">{action.progress}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-emerald-500 rounded-full transition-all"
+                                style={{ width: `${action.progress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-50">
+                            <span>Resp : <strong>{action.ownerName}</strong></span>
+                            <span>Échéance : <strong>{new Date(action.dueDate).toLocaleDateString('fr-FR')}</strong></span>
                           </div>
                         </div>
-
-                        <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-50">
-                          <span>Resp : <strong>{action.ownerName}</strong></span>
-                          <span>Échéance : <strong>{new Date(action.dueDate).toLocaleDateString('fr-FR')}</strong></span>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
