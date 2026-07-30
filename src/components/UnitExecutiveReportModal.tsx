@@ -18,7 +18,8 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
+import { toPng } from 'html-to-image';
 import { ActionPlan, Risk, TenantConfig } from '../types';
 import { getCriticalityFromThresholds, getThresholdColorStyles } from '../utils/riskUtils';
 
@@ -85,53 +86,44 @@ export default function UnitExecutiveReportModal({
       // Small delay for DOM layout stabilization
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2, // Crisp 2x DPI resolution
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: 1200,
-        onclone: (clonedDoc) => {
-          try {
-            // 1. Sanitize all <style> tag textContent so html2canvas parser never fails on oklch/color-mix
-            const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
-            styleElements.forEach((styleEl) => {
-              try {
-                if (styleEl.textContent && (styleEl.textContent.includes('oklch') || styleEl.textContent.includes('color-mix') || styleEl.textContent.includes('oklab'))) {
-                  styleEl.textContent = styleEl.textContent
-                    .replace(/oklch\([^)]+\)/gi, '#64748b')
-                    .replace(/oklab\([^)]+\)/gi, '#64748b')
-                    .replace(/color-mix\([^)]+\)/gi, '#64748b');
-                }
-              } catch (e) {}
-            });
-
-            // 2. Sanitize inline style attributes on cloned DOM elements
-            const allElements = Array.from(clonedDoc.querySelectorAll('*'));
-            allElements.forEach((el) => {
-              try {
-                const styleAttr = el.getAttribute('style');
-                if (styleAttr && (styleAttr.includes('oklch') || styleAttr.includes('color-mix') || styleAttr.includes('oklab'))) {
-                  el.setAttribute(
-                    'style',
-                    styleAttr
+      let image = '';
+      try {
+        // Primary Method: html-to-image (uses browser native SVG foreignObject rendering, 100% compatible with Tailwind v4 oklch)
+        image = await toPng(reportRef.current, {
+          quality: 0.98,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          cacheBust: true,
+        });
+      } catch (toPngErr) {
+        console.warn('toPng direct export failed, using html2canvas-pro fallback:', toPngErr);
+        // Fallback Method: html2canvas-pro (handles oklch, oklab natively)
+        const canvas = await html2canvas(reportRef.current, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          windowWidth: 1200,
+          onclone: (clonedDoc) => {
+            try {
+              const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
+              styleElements.forEach((styleEl) => {
+                try {
+                  if (styleEl.textContent && (styleEl.textContent.includes('oklch') || styleEl.textContent.includes('color-mix') || styleEl.textContent.includes('oklab'))) {
+                    styleEl.textContent = styleEl.textContent
                       .replace(/oklch\([^)]+\)/gi, '#64748b')
                       .replace(/oklab\([^)]+\)/gi, '#64748b')
-                      .replace(/color-mix\([^)]+\)/gi, '#64748b')
-                  );
-                }
-              } catch (e) {}
-            });
-          } catch (e) {
-            console.warn('onclone sanitize warning:', e);
+                      .replace(/color-mix\([^)]+\)/gi, '#64748b');
+                  }
+                } catch (e) {}
+              });
+            } catch (e) {}
           }
-        }
-      });
+        });
+        image = canvas.toDataURL('image/png');
+      }
 
-      const image = canvas.toDataURL('image/png');
       const link = document.createElement('a');
-      link.href = image;
-      const unitCodeStr = currentUnit?.code ? `-${currentUnit.code}` : '';
       const unitCodeOrName = currentUnit?.code || currentUnit?.name || 'Unite';
       const cleanName = unitCodeOrName.replace(/[^a-zA-Z0-9_-]/g, '_');
       const filename = `Synthese_DG_${cleanName}_${new Date().toISOString().split('T')[0]}.png`;
