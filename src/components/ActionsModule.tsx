@@ -336,7 +336,7 @@ export default function ActionsModule({
                         ) : (
                           unitRisks.map(r => (
                             <option key={r.id} value={r.id}>
-                              [{r.id}] {r.title} (Score Résiduel : {r.scoreResiduel ?? r.scoreBrut ?? 0})
+                              {r.title}
                             </option>
                           ))
                         )}
