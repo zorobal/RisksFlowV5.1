@@ -86,26 +86,48 @@ export default function UnitExecutiveReportModal({
       // Small delay for DOM layout stabilization
       await new Promise(resolve => setTimeout(resolve, 200));
 
+      const targetNode = reportRef.current;
+      const width = 960;
+      const height = targetNode.scrollHeight || targetNode.offsetHeight;
+
       let image = '';
       try {
-        // Primary Method: html-to-image (uses browser native SVG foreignObject rendering, 100% compatible with Tailwind v4 oklch)
-        image = await toPng(reportRef.current, {
+        // Primary Method: html-to-image with explicit container width & height to avoid right margin clipping
+        image = await toPng(targetNode, {
           quality: 0.98,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
           cacheBust: true,
+          width: width,
+          height: height,
+          style: {
+            transform: 'none',
+            width: `${width}px`,
+            height: `${height}px`,
+            maxWidth: 'none',
+            margin: '0',
+            boxSizing: 'border-box',
+          }
         });
       } catch (toPngErr) {
         console.warn('toPng direct export failed, using html2canvas-pro fallback:', toPngErr);
-        // Fallback Method: html2canvas-pro (handles oklch, oklab natively)
-        const canvas = await html2canvas(reportRef.current, {
+        // Fallback Method: html2canvas-pro with cloned node width enforcement
+        const canvas = await html2canvas(targetNode, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           logging: false,
-          windowWidth: 1200,
+          width: width,
+          height: height,
+          windowWidth: width + 200,
           onclone: (clonedDoc) => {
             try {
+              const clonedNode = clonedDoc.getElementById('unit-executive-report-document');
+              if (clonedNode) {
+                clonedNode.style.width = `${width}px`;
+                clonedNode.style.minWidth = `${width}px`;
+                clonedNode.style.maxWidth = `${width}px`;
+              }
               const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
               styleElements.forEach((styleEl) => {
                 try {
@@ -215,12 +237,12 @@ export default function UnitExecutiveReportModal({
         </div>
 
         {/* EXPORTABLE DOCUMENT CANVAS (ID: unit-executive-report-document) */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-200/60">
+        <div className="p-4 sm:p-6 overflow-y-auto overflow-x-auto flex-1 bg-slate-200/60 flex justify-center">
           <div
             id="unit-executive-report-document"
             ref={reportRef}
-            className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 space-y-6 max-w-4xl mx-auto text-slate-900 font-sans"
-            style={{ width: '100%', minWidth: '768px' }}
+            className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 space-y-6 text-slate-900 font-sans shrink-0"
+            style={{ width: '960px', minWidth: '960px', boxSizing: 'border-box' }}
           >
             {/* 1. OFFICIAL EXECUTIVE HEADER */}
             <div className="border-b-2 border-slate-900 pb-5 flex items-start justify-between gap-4">
@@ -262,14 +284,14 @@ export default function UnitExecutiveReportModal({
                 </div>
               </div>
 
-              <div className="text-right space-y-1">
+              <div className="text-right space-y-1 max-w-[340px] shrink-0">
                 <span 
                   className="inline-block px-3 py-1 font-black text-xs rounded-lg uppercase tracking-wide border shadow-xs"
                   style={{ backgroundColor: '#0f172a', color: '#fbbf24', borderColor: '#1e293b' }}
                 >
                   RAPPORT SYNTHÈSE EXECUTIVE
                 </span>
-                <h2 className="text-base font-extrabold pt-1" style={{ color: '#0f172a' }}>
+                <h2 className="text-xs font-extrabold pt-1 leading-snug break-words" style={{ color: '#0f172a' }}>
                   Unité : <span style={{ color: '#4338ca' }}>{currentUnit?.name || 'Unité Organisationnelle'}</span>
                 </h2>
                 {currentUnit?.code && (
