@@ -28,7 +28,9 @@ interface AuditModuleProps {
   users: GrcUser[];
   currentUser: GrcUser;
   onAddMission: (mission: Omit<AuditMission, 'id'>) => void;
+  onDeleteMission?: (id: string) => void;
   onAddFinding: (finding: Omit<AuditFinding, 'id'>) => void;
+  onDeleteFinding?: (id: string) => void;
   onUpdateFindingStatus: (id: string, status: AuditFinding['statut']) => void;
   onAddLog: (action: string, details: string) => void;
 }
@@ -40,7 +42,9 @@ export default function AuditModule({
   users,
   currentUser,
   onAddMission,
+  onDeleteMission,
   onAddFinding,
+  onDeleteFinding,
   onUpdateFindingStatus,
   onAddLog
 }: AuditModuleProps) {
@@ -303,18 +307,34 @@ export default function AuditModule({
                     }`}
                   >
                     <div className="flex justify-between items-start gap-2 mb-1">
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                        m.type === 'Annuelle' ? 'bg-indigo-100 text-indigo-700' :
-                        m.type === 'Cyclique' ? 'bg-teal-100 text-teal-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {m.type}
-                      </span>
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
-                        m.status === 'Clôturée' ? 'bg-green-100 text-green-700' :
-                        m.status === 'En cours' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {m.status}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                          m.type === 'Annuelle' ? 'bg-indigo-100 text-indigo-700' :
+                          m.type === 'Cyclique' ? 'bg-teal-100 text-teal-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {m.type}
+                        </span>
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                          m.status === 'Clôturée' ? 'bg-green-100 text-green-700' :
+                          m.status === 'En cours' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {m.status}
+                        </span>
+                      </div>
+                      {onDeleteMission && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Voulez-vous vraiment supprimer la mission d'audit "${m.titre}" ?`)) {
+                              onDeleteMission(m.id);
+                            }
+                          }}
+                          className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                          title="Supprimer cette mission"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                     <p className="font-bold text-slate-800 text-[11px] leading-tight line-clamp-1">
                       {m.titre}
@@ -454,6 +474,20 @@ export default function AuditModule({
                             }`}>
                               {f.statut}
                             </span>
+
+                            {onDeleteFinding && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Voulez-vous vraiment supprimer le constat "${f.titre}" ?`)) {
+                                    onDeleteFinding(f.id);
+                                  }
+                                }}
+                                className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                                title="Supprimer ce constat"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
 

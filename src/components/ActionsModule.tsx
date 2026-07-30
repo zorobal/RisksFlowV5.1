@@ -15,7 +15,8 @@ import {
   XOctagon, 
   Sliders,
   AlertTriangle,
-  HelpCircle
+  HelpCircle,
+  Trash2
 } from 'lucide-react';
 import { ActionPlan, Risk, TenantConfig, User } from '../types';
 
@@ -26,6 +27,7 @@ interface ActionsModuleProps {
   users: User[];
   onAddActionPlan: (plan: Omit<ActionPlan, 'id' | 'progress'>) => void;
   onUpdateActionPlan: (plan: ActionPlan) => void;
+  onDeleteActionPlan?: (id: string) => void;
   onAddLog: (action: string, details: string) => void;
 }
 
@@ -36,6 +38,7 @@ export default function ActionsModule({
   users,
   onAddActionPlan,
   onUpdateActionPlan,
+  onDeleteActionPlan,
   onAddLog
 }: ActionsModuleProps) {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
@@ -306,6 +309,19 @@ export default function ActionsModule({
                         >
                           Réalisé
                         </button>
+                        {onDeleteActionPlan && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Voulez-vous vraiment supprimer le plan d'action "${action.title}" ?`)) {
+                                onDeleteActionPlan(action.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-md text-red-500 hover:bg-red-50 hover:text-red-700 transition cursor-pointer ml-1"
+                            title="Supprimer ce plan d'action"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Manual Progress Slider */}

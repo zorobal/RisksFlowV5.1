@@ -15,7 +15,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { Risk, TenantConfig } from '../types';
-import { getCriticalityFromThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, computeGRCScores } from '../utils/riskUtils';
 
 interface EvaluationModuleProps {
   risks: Risk[];
@@ -47,13 +47,8 @@ export default function EvaluationModule({
     }
   };
 
-  // Re-calculate scores dynamically
-  const isSoustractive = tenantConfig.formula.expression === '(P * I) - M';
-  const scoreBrutSim = simFreq * simImpact;
-  
-  const scoreResiduelSim = isSoustractive 
-    ? Math.max(0, scoreBrutSim - simControl)
-    : (scoreBrutSim * simControl);
+  // Re-calculate scores dynamically via central GRC compute function
+  const { scoreBrut: scoreBrutSim, scoreResiduel: scoreResiduelSim, isDirect: isDirectFormula } = computeGRCScores(simFreq, simImpact, simControl, tenantConfig.formula);
 
   const getCritForScore = (score: number) => {
     return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
@@ -63,7 +58,7 @@ export default function EvaluationModule({
 
   // Financial Estimation simulation
   const rawFinancialLoss = finExposure * (simImpact / tenantConfig.matrixSize);
-  const mitigationFactor = (tenantConfig.matrixSize - simControl + 1) / tenantConfig.matrixSize;
+  const mitigationFactor = isDirectFormula ? 1.0 : ((tenantConfig.matrixSize - simControl + 1) / tenantConfig.matrixSize);
   const estimatedResidualLoss = Math.round(rawFinancialLoss * mitigationFactor);
 
   return (
@@ -159,28 +154,37 @@ export default function EvaluationModule({
               </div>
 
               {/* Slider 3: Maitrise */}
-              <div className="space-y-1.5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-150">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-slate-600 uppercase text-[10px]">3. Efficacité Maîtrise / Contrôle (M)</span>
-                  <span className="font-bold font-mono text-xs bg-indigo-600 text-white px-2 py-0.5 rounded">{simControl}</span>
+              {isDirectFormula ? (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-1 text-[10.5px]">
+                  <span className="font-bold text-indigo-900 block">3. Efficacité Maîtrise / Contrôle (M) — Non applicable</span>
+                  <p className="text-slate-600 text-[10px]">
+                    La formule sélectionnée (Score Brut Direct) n'applique aucun facteur d'atténuation. Les contrôles ne modifient pas le score résiduel final.
+                  </p>
                 </div>
-                <input 
-                  type="range"
-                  min="1"
-                  max={tenantConfig.matrixSize}
-                  step="1"
-                  value={simControl}
-                  onChange={(e) => { setSimControl(Number(e.target.value)); setSelectedSimRisk(null); }}
-                  className="w-full h-1.5 accent-indigo-600 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-[9px] text-indigo-600 font-semibold">
-                  <span>Maîtrisé (1)</span>
-                  <span>Faible / Inexistant ({tenantConfig.matrixSize})</span>
+              ) : (
+                <div className="space-y-1.5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-150">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-600 uppercase text-[10px]">3. Efficacité Maîtrise / Contrôle (M)</span>
+                    <span className="font-bold font-mono text-xs bg-indigo-600 text-white px-2 py-0.5 rounded">{simControl}</span>
+                  </div>
+                  <input 
+                    type="range"
+                    min="1"
+                    max={tenantConfig.matrixSize}
+                    step="1"
+                    value={simControl}
+                    onChange={(e) => { setSimControl(Number(e.target.value)); setSelectedSimRisk(null); }}
+                    className="w-full h-1.5 accent-indigo-600 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[9px] text-indigo-600 font-semibold">
+                    <span>Maîtrisé (1)</span>
+                    <span>Faible / Inexistant ({tenantConfig.matrixSize})</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic mt-1 font-medium bg-white/70 p-1 rounded">
+                    💡 {tenantConfig.scales.control.find(m => m.value === simControl)?.description}
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500 italic mt-1 font-medium bg-white/70 p-1 rounded">
-                  💡 {tenantConfig.scales.control.find(m => m.value === simControl)?.description}
-                </p>
-              </div>
+              )}
             </div>
 
             {/* RESULTS VIEW */}

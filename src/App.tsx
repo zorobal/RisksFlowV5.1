@@ -1041,6 +1041,12 @@ export default function App() {
                 users={activeTenantUsers}
                 onAddActionPlan={(plan) => setActions(prev => [...prev, { ...plan, id: `a_${Date.now()}_${prev.length + 1}`, tenantId: activeTenantId, progress: 0 }])}
                 onUpdateActionPlan={(updated) => setActions(prev => prev.map(a => a.id === updated.id ? { ...updated, tenantId: updated.tenantId || a.tenantId || activeTenantId } : a))}
+                onDeleteActionPlan={(id) => {
+                  setActions(prev => prev.filter(a => a.id !== id));
+                  addAuditLog('Suppression Plan d\'action', `Suppression définitive du plan d'action ${id}.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'action_plans', id);
+                }}
                 onAddLog={addAuditLog}
               />
             )}
@@ -1088,7 +1094,20 @@ export default function App() {
                 users={activeTenantUsers}
                 currentUser={currentUser}
                 onAddMission={(newM) => setAuditMissions(prev => [...prev, { ...newM, id: `m_${Date.now()}`, tenantId: activeTenantId }])}
+                onDeleteMission={(id) => {
+                  setAuditMissions(prev => prev.filter(m => m.id !== id));
+                  setAuditFindings(prev => prev.filter(f => f.missionId !== id));
+                  addAuditLog('Suppression Mission Audit', `Suppression de la mission d'audit ${id} et de ses constats.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'audit_missions', id);
+                }}
                 onAddFinding={(newF) => setAuditFindings(prev => [...prev, { ...newF, id: `f_${Date.now()}`, tenantId: activeTenantId }])}
+                onDeleteFinding={(id) => {
+                  setAuditFindings(prev => prev.filter(f => f.id !== id));
+                  addAuditLog('Suppression Constat Audit', `Suppression du constat d'audit ${id}.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'audit_findings', id);
+                }}
                 onUpdateFindingStatus={(id, status) => setAuditFindings(prev => prev.map(f => f.id === id ? { ...f, statut: status } : f))}
                 onAddLog={addAuditLog}
               />
@@ -1101,9 +1120,28 @@ export default function App() {
                 incidents={activeTenantIncidents}
                 fonctions={fonctions}
                 onAddFramework={(fw) => setComplianceFrameworks(prev => [...prev, { ...fw, id: `cf_${Date.now()}`, tenantId: activeTenantId }])}
+                onDeleteFramework={(id) => {
+                  setComplianceFrameworks(prev => prev.filter(f => f.id !== id));
+                  setComplianceObligations(prev => prev.filter(o => o.frameworkId !== id));
+                  addAuditLog('Suppression Référentiel', `Suppression du référentiel ${id} et de ses obligations.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'compliance_frameworks', id);
+                }}
                 onAddObligation={(ob) => setComplianceObligations(prev => [...prev, { ...ob, id: `co_${Date.now()}`, tenantId: activeTenantId }])}
+                onDeleteObligation={(id) => {
+                  setComplianceObligations(prev => prev.filter(o => o.id !== id));
+                  addAuditLog('Suppression Obligation', `Suppression de l'obligation ${id}.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'compliance_obligations', id);
+                }}
                 onUpdateObligationStatus={(id, status) => setComplianceObligations(prev => prev.map(o => o.id === id ? { ...o, statut: status } : o))}
                 onAddIncident={(inc) => setComplianceIncidents(prev => [...prev, { ...inc, id: `inc_${Date.now()}`, tenantId: activeTenantId }])}
+                onDeleteIncident={(id) => {
+                  setComplianceIncidents(prev => prev.filter(i => i.id !== id));
+                  addAuditLog('Suppression Incident Conformité', `Suppression de l'incident ${id}.`);
+                  const client = getSupabaseClient();
+                  if (client) deleteItemFromSupabase(client, 'compliance_incidents', id);
+                }}
                 onUpdateIncidentStatus={(id, status) => setComplianceIncidents(prev => prev.map(i => i.id === id ? { ...i, statutDeclaration: status } : i))}
                 onAddLog={addAuditLog}
               />

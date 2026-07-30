@@ -38,7 +38,7 @@ import html2canvas from 'html2canvas';
 import { Risk, TenantConfig, ActionPlan, MatrixThreshold } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
-import { getCriticalityFromThresholds, COLOR_PRESETS } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, COLOR_PRESETS, computeGRCScores } from '../utils/riskUtils';
 
 interface MatrixModuleProps {
   risks: Risk[];
@@ -194,13 +194,8 @@ export default function MatrixModule({
   };
 
   const getCellClassNameForNet = (brutMin: number, controlVal: number) => {
-    let netScore = brutMin * controlVal;
-    
-    if (tenantConfig.formula.expression === '(P * I) - M') {
-      netScore = Math.max(0, brutMin - controlVal);
-    }
-
-    const crit = getCriticality(netScore);
+    const { scoreResiduel } = computeGRCScores(brutMin, 1, controlVal, tenantConfig.formula);
+    const crit = getCriticality(scoreResiduel);
     return `${crit.color} border transition hover:brightness-95 cursor-pointer`;
   };
 

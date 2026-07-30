@@ -29,10 +29,14 @@ import {
   Sliders,
   Loader2,
   Image as ImageIcon,
-  Search
+  Search,
+  Trophy,
+  Calculator,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Risk, TenantConfig, ActionPlan, OrgEntity } from '../types';
-import { getCriticalityFromThresholds, getThresholdColorStyles, COLOR_PRESETS, generateDefaultThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, getThresholdColorStyles, COLOR_PRESETS, generateDefaultThresholds, computeGRCScores } from '../utils/riskUtils';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 
 interface DashboardModuleProps {
@@ -62,6 +66,12 @@ export default function DashboardModule({
 
   // Search filter for active risks panel
   const [riskSearchQuery, setRiskSearchQuery] = useState<string>('');
+
+  // Top 5 Units display mode: 'both' | 'count' | 'exposure'
+  const [top5Tab, setTop5Tab] = useState<'both' | 'count' | 'exposure'>('both');
+
+  // Toggle calculation explanation for Top 5 Units
+  const [showCalculationExplanation, setShowCalculationExplanation] = useState<boolean>(true);
 
   // Temporal Date filters state
   const [selectedYear, setSelectedYear] = useState<string>('2026');
@@ -397,6 +407,10 @@ export default function DashboardModule({
       const entCode = entObj?.code || entObj?.name || (entId === 'unassigned' ? 'N/A' : entId);
       const entName = entObj ? entObj.name : (entId === 'unassigned' ? 'Non affecté' : entId);
 
+      // Dynamically compute residual score based on selected formula
+      const { scoreResiduel } = computeGRCScores(r.frequence, r.impact, r.maitrise, tenantConfig.formula);
+      const effectiveResiduel = typeof scoreResiduel === 'number' && !isNaN(scoreResiduel) ? scoreResiduel : (r.scoreResiduel || 0);
+
       if (!entityMap.has(entId)) {
         entityMap.set(entId, {
           id: entId,
@@ -416,9 +430,9 @@ export default function DashboardModule({
 
       const item = entityMap.get(entId)!;
       item.total += 1;
-      item.maxScore = Math.max(item.maxScore, r.scoreResiduel);
+      item.maxScore = Math.max(item.maxScore, effectiveResiduel);
 
-      const crit = getCriticality(r.scoreResiduel);
+      const crit = getCriticality(effectiveResiduel);
       const levelObj = item.levelCounts.find(l => l.label === crit.label);
       if (levelObj) {
         levelObj.count += 1;
@@ -427,11 +441,29 @@ export default function DashboardModule({
 
     return Array.from(entityMap.values()).map(item => {
       const entRisks = filteredRisks.filter(r => (r.entityId || 'unassigned') === item.id);
-      const sum = entRisks.reduce((acc, r) => acc + r.scoreResiduel, 0);
+      const sum = entRisks.reduce((acc, r) => {
+        const { scoreResiduel } = computeGRCScores(r.frequence, r.impact, r.maitrise, tenantConfig.formula);
+        const effectiveScore = typeof scoreResiduel === 'number' && !isNaN(scoreResiduel) ? scoreResiduel : (r.scoreResiduel || 0);
+        return acc + effectiveScore;
+      }, 0);
       item.avgScore = item.total > 0 ? Number((sum / item.total).toFixed(1)) : 0;
       return item;
     }).sort((a, b) => b.total - a.total);
-  }, [filteredRisks, tenantConfig.entities, tenantConfig.matrixThresholds]);
+  }, [filteredRisks, tenantConfig.entities, tenantConfig.matrixThresholds, tenantConfig.formula]);
+
+  // Top 5 Units sorted by Risk Count (Nombre de risques)
+  const top5UnitsByCount = useMemo(() => {
+    return [...unitCriticalityBreakdown]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [unitCriticalityBreakdown]);
+
+  // Top 5 Units sorted by Average Net Exposure (Exposition Nette Moyenne)
+  const top5UnitsByExposure = useMemo(() => {
+    return [...unitCriticalityBreakdown]
+      .sort((a, b) => b.avgScore - a.avgScore)
+      .slice(0, 5);
+  }, [unitCriticalityBreakdown]);
 
   // 5. Strategic Chart: Unit vs Risk Categories Breakdown (X-axis: Units, Sub-bars / Stacked: Categories with %, counts, and legend)
   const unitCategoryBreakdown = useMemo(() => {
@@ -1141,6 +1173,388 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
             <AlertTriangle className="w-5 h-5" />
           </div>
         </div>
+      </div>
+
+      {/* KPI Section: Total des Risques selon la Graduation & Seuils de Criticité */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-indigo-650" />
+            <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider">
+              Total des Risques selon la Graduation & Seuils de Criticité
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+            {totalRisks} risque(s) consolidé(s)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {criticalityCounts.map((item, idx) => {
+            const styles = getVibrantColors(item.label);
+            return (
+              <div
+                key={idx}
+                style={{ backgroundColor: styles.bg, borderColor: styles.border }}
+                className="p-3.5 rounded-xl border flex flex-col justify-between space-y-2 hover:shadow-xs transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span style={{ color: styles.text }} className="font-black text-xs uppercase tracking-wider">
+                    {item.label}
+                  </span>
+                  <span className="font-mono text-[10px] font-black px-2 py-0.5 rounded bg-white/90 shadow-2xs text-slate-800">
+                    {item.percentage}%
+                  </span>
+                </div>
+
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {item.count}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    risque(s)
+                  </span>
+                </div>
+
+                {/* Progress bar indicator */}
+                <div className="w-full bg-black/10 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${item.percentage}%`,
+                      backgroundColor: item.textColor || styles.text
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* TOP 5 UNITÉS : NOMBRE DE RISQUES ET EXPOSITION NETTE MOYENNE */}
+      <div className="w-full bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 space-y-4 mx-auto">
+        {/* Header with Title, Tab Switcher & Explanation Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center border border-amber-200 shadow-2xs">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
+                Classement des Unités : Top 5 par Volume & Top 5 par Exposition Nette Moyenne
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Analyse comparative des entités prioritaires selon le nombre total de risques et l'exposition résiduelle moyenne.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View Mode Tabs */}
+            <div className="bg-slate-100 p-1 rounded-lg flex items-center gap-1 border border-slate-200 text-xs">
+              <button
+                onClick={() => setTop5Tab('both')}
+                className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                  top5Tab === 'both' ? 'bg-white text-indigo-700 shadow-2xs font-extrabold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Vue Consolidée (Les 2)
+              </button>
+              <button
+                onClick={() => setTop5Tab('count')}
+                className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                  top5Tab === 'count' ? 'bg-white text-indigo-700 shadow-2xs font-extrabold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📊 Top 5 par Volume
+              </button>
+              <button
+                onClick={() => setTop5Tab('exposure')}
+                className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer ${
+                  top5Tab === 'exposure' ? 'bg-white text-indigo-700 shadow-2xs font-extrabold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ⚖️ Top 5 par Exp. Nette Moy.
+              </button>
+            </div>
+
+            {/* Explanation Toggle */}
+            <button
+              onClick={() => setShowCalculationExplanation(prev => !prev)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition cursor-pointer"
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              <span>{showCalculationExplanation ? 'Masquer la formule' : '💡 Formules & Modèles GRC'}</span>
+              {showCalculationExplanation ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Detailed Explanation Panel for Designees */}
+        {showCalculationExplanation && (
+          <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-xl shadow-md border border-slate-800 space-y-3 animate-fade-in text-xs w-full">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2 text-amber-400 font-extrabold uppercase tracking-wide text-[10.5px]">
+                <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Prise en Compte des Modèles de Cotation de la Sévérité et du Score Net (Atténuation / Maîtrise)</span>
+              </div>
+              <span className="text-[10px] font-mono text-indigo-300 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-800 font-bold">
+                Formule active : {tenantConfig.formula?.name || 'Formule Soustractive IFACI'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-[11px] leading-relaxed">
+              {/* Box 1: Modèle de Cotation de la Sévérité */}
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10 space-y-1.5">
+                <span className="font-bold text-amber-300 block text-[10.5px] uppercase tracking-wide">
+                  1. Modèle du Mode de Cotation de la Sévérité
+                </span>
+                <div className="bg-black/50 p-2 rounded font-mono text-[11px] text-amber-200 text-center border border-white/10">
+                  Matrice {tenantConfig.matrixSize || 3}x{tenantConfig.matrixSize || 3} ({ (tenantConfig.matrixSize || 3) * (tenantConfig.matrixSize || 3) } cases)
+                </div>
+                <p className="text-slate-300 text-[10px] leading-normal">
+                  Seuils de criticité configurés : <strong>{(tenantConfig.matrixThresholds || []).map(t => t.label).join(', ') || 'Faible, Modéré, Élevé, Critique'}</strong>. Les scores résiduels sont automatiquement classés dans ces tranches.
+                </p>
+              </div>
+
+              {/* Box 2: Modèle de Calcul du Score Net / Atténuation */}
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10 space-y-1.5">
+                <span className="font-bold text-amber-300 block text-[10.5px] uppercase tracking-wide">
+                  2. Modèle de Calcul du Score Net (Maîtrise)
+                </span>
+                <div className="bg-black/50 p-2 rounded font-mono text-[11px] text-amber-200 text-center border border-white/10">
+                  Formule Net = {tenantConfig.formula?.expression || '(P * I) - M'}
+                </div>
+                <p className="text-slate-300 text-[10px] leading-normal">
+                  Chaque risque applique cette formule dynamique avec l'indice de maîtrise <strong>M</strong>. L'Exposition Nette Moyenne de l'unité = <strong>∑(Score Résiduel Net) / N</strong>.
+                </p>
+              </div>
+
+              {/* Box 3: Guidage pour les Désignés */}
+              <div className="bg-white/5 p-3 rounded-lg border border-white/10 space-y-1.5">
+                <span className="font-bold text-amber-300 block text-[10.5px] uppercase tracking-wide">
+                  3. Exploitation par les Désignés
+                </span>
+                <p className="text-slate-300 text-[10px] leading-normal">
+                  Le Top 5 par Volume identifie les entités nécessitant le plus grand effort de cartographie. Le Top 5 par Sévérité Moyenne cible les entités où les mesures de maîtrise (atténuation) sont les plus urgentes.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 1: TOP 5 PAR NOMBRE DE RISQUES (VOLUME) */}
+        {(top5Tab === 'both' || top5Tab === 'count') && (
+          <div className="space-y-2 pt-1 w-full">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+              <h4 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                📊 1. Top 5 des Unités selon le Nombre de Risques (Volume)
+              </h4>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                Trié par N total de risques
+              </span>
+            </div>
+
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4 justify-stretch items-stretch">
+              {top5UnitsByCount.length === 0 ? (
+                <div className="col-span-5 p-6 text-center text-slate-400 italic text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                  Aucune donnée disponible.
+                </div>
+              ) : (
+                top5UnitsByCount.map((unit, idx) => {
+                  const pctOfTotal = totalRisks > 0 ? ((unit.total / totalRisks) * 100).toFixed(1) : '0';
+                  const crit = getCriticality(unit.avgScore);
+                  const rankBadges = [
+                    { bg: 'bg-indigo-600 text-white', label: '#1' },
+                    { bg: 'bg-indigo-500 text-white', label: '#2' },
+                    { bg: 'bg-slate-600 text-white', label: '#3' },
+                    { bg: 'bg-slate-500 text-white', label: '#4' },
+                    { bg: 'bg-slate-400 text-white', label: '#5' },
+                  ];
+                  const rank = rankBadges[idx] || rankBadges[4];
+
+                  return (
+                    <div 
+                      key={`count_${unit.id}`}
+                      className="bg-slate-50/70 rounded-xl border border-slate-200 p-3.5 space-y-3 flex flex-col justify-between hover:shadow-sm transition-all relative group w-full"
+                    >
+                      {/* Top Rank + Code */}
+                      <div className="flex items-center justify-between">
+                        <span className={`w-6 h-6 rounded-full font-mono font-black text-xs flex items-center justify-center shadow-2xs ${rank.bg}`}>
+                          {rank.label}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          {unit.code}
+                        </span>
+                      </div>
+
+                      {/* Unit Title */}
+                      <div>
+                        <h5 className="font-bold text-slate-800 text-xs line-clamp-2 leading-snug group-hover:text-indigo-650 transition-colors" title={unit.name}>
+                          {unit.name}
+                        </h5>
+                      </div>
+
+                      {/* Main Volume Badge */}
+                      <div className="p-2.5 rounded-lg border bg-indigo-50/60 border-indigo-200 space-y-1">
+                        <span className="text-[8.5px] font-black text-indigo-800 uppercase tracking-wider block">
+                          Total Risques Recensés
+                        </span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xl font-black font-mono text-indigo-950">
+                            {unit.total} <span className="text-xs font-semibold text-indigo-700">risques</span>
+                          </span>
+                          <span className="text-[9.5px] font-mono font-bold bg-indigo-200/80 text-indigo-900 px-1.5 py-0.5 rounded">
+                            {pctOfTotal}% du total
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Secondary: Average Score */}
+                      <div className="flex justify-between items-center text-[10px] text-slate-600 bg-white p-2 rounded border border-slate-200">
+                        <span className="font-semibold">Exp. Nette Moyenne:</span>
+                        <span className="font-mono font-black" style={{ color: crit.textColor }}>
+                          {unit.avgScore} ({crit.label})
+                        </span>
+                      </div>
+
+                      {/* Criticality Breakdown */}
+                      <div className="space-y-1 pt-1 border-t border-slate-200/80">
+                        <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Décomposition par Seuil :
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {unit.levelCounts.map((l, lIdx) => (
+                            <span
+                              key={lIdx}
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200"
+                              style={{ backgroundColor: `${l.color}20`, color: l.textColor || '#1e293b' }}
+                              title={`${l.count} risque(s) ${l.label}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: l.color }} />
+                              <span>{l.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 2: TOP 5 PAR EXPOSITION NETTE MOYENNE (SÉVÉRITÉ) */}
+        {(top5Tab === 'both' || top5Tab === 'exposure') && (
+          <div className="space-y-2 pt-2 border-t border-slate-200 w-full">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+              <h4 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                ⚖️ 2. Top 5 des Unités selon l'Exposition Nette Moyenne (Sévérité)
+              </h4>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                Trié par Score Moyen ∑(Résiduel) / N
+              </span>
+            </div>
+
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4 justify-stretch items-stretch">
+              {top5UnitsByExposure.length === 0 ? (
+                <div className="col-span-5 p-6 text-center text-slate-400 italic text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                  Aucune donnée disponible.
+                </div>
+              ) : (
+                top5UnitsByExposure.map((unit, idx) => {
+                  const crit = getCriticality(unit.avgScore);
+                  const rankBadges = [
+                    { bg: 'bg-amber-500 text-white', label: '#1' },
+                    { bg: 'bg-slate-400 text-white', label: '#2' },
+                    { bg: 'bg-amber-700 text-white', label: '#3' },
+                    { bg: 'bg-indigo-600 text-white', label: '#4' },
+                    { bg: 'bg-slate-600 text-white', label: '#5' },
+                  ];
+                  const rank = rankBadges[idx] || rankBadges[4];
+
+                  return (
+                    <div 
+                      key={`exposure_${unit.id}`}
+                      className="bg-slate-50/70 rounded-xl border border-slate-200 p-3.5 space-y-3 flex flex-col justify-between hover:shadow-sm transition-all relative group w-full"
+                    >
+                      {/* Top Rank + Code */}
+                      <div className="flex items-center justify-between">
+                        <span className={`w-6 h-6 rounded-full font-mono font-black text-xs flex items-center justify-center shadow-2xs ${rank.bg}`}>
+                          {rank.label}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          {unit.code}
+                        </span>
+                      </div>
+
+                      {/* Unit Title */}
+                      <div>
+                        <h5 className="font-bold text-slate-800 text-xs line-clamp-2 leading-snug group-hover:text-indigo-650 transition-colors" title={unit.name}>
+                          {unit.name}
+                        </h5>
+                      </div>
+
+                      {/* Main Average Exposure Badge */}
+                      <div 
+                        className="p-2.5 rounded-lg border space-y-1" 
+                        style={{ backgroundColor: `${crit.color}15`, borderColor: `${crit.color}40` }}
+                      >
+                        <span className="text-[8.5px] font-black uppercase tracking-wider block" style={{ color: crit.textColor }}>
+                          Exp. Nette Moyenne
+                        </span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xl font-black font-mono" style={{ color: crit.textColor }}>
+                            {unit.avgScore}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase" style={{ backgroundColor: crit.color, color: crit.textColor }}>
+                            {crit.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Secondary: Total Risks */}
+                      <div className="flex justify-between items-center text-[10px] text-slate-600 bg-white p-2 rounded border border-slate-200">
+                        <span className="font-semibold">Nombre de Risques:</span>
+                        <span className="font-mono font-black text-slate-900">{unit.total} risque(s)</span>
+                      </div>
+
+                      {/* Criticality Breakdown */}
+                      <div className="space-y-1 pt-1 border-t border-slate-200/80">
+                        <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Décomposition par Seuil :
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {unit.levelCounts.map((l, lIdx) => (
+                            <span
+                              key={lIdx}
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-200"
+                              style={{ backgroundColor: `${l.color}20`, color: l.textColor || '#1e293b' }}
+                              title={`${l.count} risque(s) ${l.label}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: l.color }} />
+                              <span>{l.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Max Score Footer */}
+                      <div className="flex justify-between items-center text-[9.5px] text-slate-500 font-semibold border-t border-slate-200 pt-1.5">
+                        <span>Score Max Résiduel:</span>
+                        <span className="font-mono font-bold text-slate-800">{unit.maxScore}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Analysis Hub: Matrix (Left) + Selected Cell Risks List (Right) */}
@@ -2662,9 +3076,17 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
 
       </div>
 
-      {/* Multi-level Drill-down Panel (Renders when a Risk is selected) */}
+      {/* Multi-level Drill-down Pop-Up Modal (Renders when a Risk is selected) */}
       {selectedRisk && (
-        <div className="bg-white rounded-xl shadow-md border border-slate-250 p-6 space-y-6 animate-fade-in relative scroll-mt-6" id="risk-drilldown-panel">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 md:p-6 overflow-y-auto animate-fade-in"
+          onClick={() => setSelectedRiskId(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto relative my-auto" 
+            id="risk-drilldown-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
           
           {/* Panel Header */}
           <div className="flex justify-between items-start border-b border-slate-200 pb-4 gap-4">
@@ -3002,6 +3424,7 @@ ${riskActions.length === 0 ? '  * *Aucun plan d\'action rattaché à ce jour.*' 
 
             </div>
           </div>
+        </div>
         </div>
       )}
 

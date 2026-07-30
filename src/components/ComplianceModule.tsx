@@ -27,9 +27,12 @@ interface ComplianceModuleProps {
   incidents: ComplianceIncident[];
   fonctions: Fonction[];
   onAddFramework: (fw: Omit<ComplianceFramework, 'id'>) => void;
+  onDeleteFramework?: (id: string) => void;
   onAddObligation: (ob: Omit<ComplianceObligation, 'id'>) => void;
+  onDeleteObligation?: (id: string) => void;
   onUpdateObligationStatus: (id: string, status: ComplianceObligation['statut']) => void;
   onAddIncident: (inc: Omit<ComplianceIncident, 'id'>) => void;
+  onDeleteIncident?: (id: string) => void;
   onUpdateIncidentStatus: (id: string, status: ComplianceIncident['statutDeclaration']) => void;
   onAddLog: (action: string, details: string) => void;
 }
@@ -40,9 +43,12 @@ export default function ComplianceModule({
   incidents,
   fonctions,
   onAddFramework,
+  onDeleteFramework,
   onAddObligation,
+  onDeleteObligation,
   onUpdateObligationStatus,
   onAddIncident,
+  onDeleteIncident,
   onUpdateIncidentStatus,
   onAddLog
 }: ComplianceModuleProps) {
@@ -311,9 +317,23 @@ export default function ComplianceModule({
                       <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
                         v{fw.version}
                       </span>
-                      <span>
-                        {fwOblCount} obligations référencées
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span>{fwOblCount} obs.</span>
+                        {onDeleteFramework && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Voulez-vous vraiment supprimer le référentiel "${fw.nom}" ?`)) {
+                                onDeleteFramework(fw.id);
+                              }
+                            }}
+                            className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                            title="Supprimer ce référentiel"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -373,20 +393,36 @@ export default function ComplianceModule({
                         </div>
 
                         <div className="md:col-span-4 flex flex-col items-stretch md:items-end gap-2 shrink-0 h-full justify-between">
-                          <select
-                            value={ob.statut}
-                            onChange={(e) => onUpdateObligationStatus(ob.id, e.target.value as any)}
-                            className={`px-2 py-1.5 rounded text-[10px] font-bold border ${
-                              ob.statut === 'Conforme' ? 'bg-green-50 text-green-800 border-green-200' :
-                              ob.statut === 'Partiel' ? 'bg-yellow-50 text-yellow-800 border-yellow-200' :
-                              ob.statut === 'Non conforme' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-gray-50 text-gray-850'
-                            }`}
-                          >
-                            <option value="Conforme">✅ Conforme</option>
-                            <option value="Partiel">⚠️ Partiel</option>
-                            <option value="Non conforme">❌ Non conforme</option>
-                            <option value="Non applicable">⚪ Non applicable</option>
-                          </select>
+                          <div className="flex items-center gap-1.5 w-full justify-end">
+                            <select
+                              value={ob.statut}
+                              onChange={(e) => onUpdateObligationStatus(ob.id, e.target.value as any)}
+                              className={`px-2 py-1.5 rounded text-[10px] font-bold border ${
+                                ob.statut === 'Conforme' ? 'bg-green-50 text-green-800 border-green-200' :
+                                ob.statut === 'Partiel' ? 'bg-yellow-50 text-yellow-800 border-yellow-200' :
+                                ob.statut === 'Non conforme' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-gray-50 text-gray-850'
+                              }`}
+                            >
+                              <option value="Conforme">✅ Conforme</option>
+                              <option value="Partiel">⚠️ Partiel</option>
+                              <option value="Non conforme">❌ Non conforme</option>
+                              <option value="Non applicable">⚪ Non applicable</option>
+                            </select>
+
+                            {onDeleteObligation && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Voulez-vous vraiment supprimer l'obligation "${ob.titre}" ?`)) {
+                                    onDeleteObligation(ob.id);
+                                  }
+                                }}
+                                className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                                title="Supprimer cette obligation"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                           
                           <span className="text-[9px] text-slate-400 italic text-right hidden md:block">
                             Mis à jour le jour de l'évaluation
@@ -432,6 +468,7 @@ export default function ComplianceModule({
                 <th className="py-2.5 px-3 border border-slate-200 text-right">Impact Financier</th>
                 <th className="py-2.5 px-3 border border-slate-200">Mesures d'atténuation prises</th>
                 <th className="py-2.5 px-3 border border-slate-200 text-center">Statut Déclaration</th>
+                <th className="py-2.5 px-3 border border-slate-200 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-[10.5px]">
@@ -468,6 +505,21 @@ export default function ComplianceModule({
                       <option value="Déclaré Autorités">🏛️ Déclaré Autorités</option>
                       <option value="Résolu">✅ Résolu</option>
                     </select>
+                  </td>
+                  <td className="py-3 px-3 border border-slate-200 text-center">
+                    {onDeleteIncident && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Voulez-vous vraiment supprimer l'incident "${inc.titre}" ?`)) {
+                            onDeleteIncident(inc.id);
+                          }
+                        }}
+                        className="p-1.5 rounded text-red-500 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                        title="Supprimer cet incident"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,29 @@
 import { MatrixThreshold } from '../types';
 
+/**
+ * Computes GRC scores (Brut & Net/Residual) based on tenant formula configuration
+ */
+export function computeGRCScores(freq: number, impact: number, control: number, formula?: any): { scoreBrut: number; scoreResiduel: number; isDirect: boolean } {
+  const scoreBrut = freq * impact;
+  const formulaType = formula?.formulaType || (formula?.id === 'f4' || formula?.id === 'direct' ? 'DIRECT_BRUT' : 'IFACI_MULTIPLICATIVE');
+  const expr = (formula?.expression || '').toLowerCase();
+
+  const isDirect = formulaType === 'DIRECT_BRUT' || formula?.id === 'f4' || formula?.id === 'direct' || expr.includes('brut direct') || expr === 'f * i' || expr === 'p * i';
+  const isSubtractive = formulaType === 'AERO_SUBTRACTIVE' || formula?.id === 'f2' || expr.includes('-');
+  const isDivisional = formulaType === 'DIVISIONAL' || formula?.id === 'f3' || expr.includes('/');
+
+  let scoreResiduel = scoreBrut * control;
+  if (isDirect) {
+    scoreResiduel = scoreBrut;
+  } else if (isSubtractive) {
+    scoreResiduel = Math.max(0, scoreBrut - control);
+  } else if (isDivisional) {
+    scoreResiduel = control > 0 ? Math.round(scoreBrut / control) : scoreBrut;
+  }
+
+  return { scoreBrut, scoreResiduel, isDirect };
+}
+
 export interface ColorPreset {
   id: string;
   name: string;

@@ -28,7 +28,7 @@ import {
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
-import { getCriticalityFromThresholds } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, computeGRCScores } from '../utils/riskUtils';
 
 interface RiskMappingModuleProps {
   risks: Risk[];
@@ -194,12 +194,7 @@ export default function RiskMappingModule({
       setIsCreating(false);
     } else if (selectedRisk) {
       // Calculate scores dynamically according to active formula expression
-      let scoreBrut = formFreq * formImpact;
-      let scoreResiduel = scoreBrut * formControl; // defaults
-
-      if (tenantConfig.formula?.expression === '(P * I) - M') {
-        scoreResiduel = Math.max(0, (formFreq * formImpact) - formControl);
-      }
+      const { scoreBrut, scoreResiduel } = computeGRCScores(formFreq, formImpact, formControl, tenantConfig.formula);
 
       const updatedHistory = [...selectedRisk.history];
       if (
@@ -866,42 +861,57 @@ export default function RiskMappingModule({
                 </p>
               </div>
 
-              {/* Variable 3: Maîtrise */}
-              <div className="space-y-1 mt-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-slate-500 font-semibold uppercase">Niveau de Maîtrise / Contrôle (M)</span>
-                  <span className="font-bold font-mono text-xs text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-100 shadow-sm">{formControl}</span>
-                </div>
-                <select
-                  value={formControl}
-                  onChange={(e) => setFormControl(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 text-slate-700 text-xs rounded p-1.5"
-                >
-                  {controlScales.map(item => (
-                    <option key={item.value} value={item.value}>
-                      Cotation {item.value} : {item.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[9px] text-slate-400 italic">
-                  {controlScales.find(f => f.value === formControl)?.description}
-                </p>
-              </div>
+              {/* Variable 3: Maîtrise (conditional if Direct Brut mode) */}
+              {(() => {
+                const { scoreBrut: formScoreBrut, scoreResiduel: formScoreResiduel, isDirect: isDirectFormula } = computeGRCScores(formFreq, formImpact, formControl, tenantConfig?.formula);
 
-              <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-purple-100 shadow-sm text-center">
-                <div>
-                  <span className="text-[9px] text-slate-400 font-bold block uppercase leading-none">Score Brut</span>
-                  <span className="font-extrabold text-slate-700 text-lg font-mono">{formFreq * formImpact}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[9px] text-slate-400 font-bold block uppercase leading-none">Score Net / Résiduel</span>
-                  <span className="font-extrabold text-red-600 text-lg font-mono">
-                    {formulaExpr === '(P * I) - M' 
-                      ? Math.max(0, (formFreq * formImpact) - formControl) 
-                      : (formFreq * formImpact * formControl)}
-                  </span>
-                </div>
-              </div>
+                return (
+                  <>
+                    {isDirectFormula ? (
+                      <div className="p-3 bg-indigo-50/90 border border-indigo-200 rounded-lg text-indigo-900 text-[10.5px] mt-2 space-y-1">
+                        <span className="font-bold flex items-center gap-1 text-indigo-800">
+                          <Wrench className="w-3.5 h-3.5 text-indigo-600" /> Mode Score Brut Direct (Sans Maîtrise)
+                        </span>
+                        <p className="text-slate-600 text-[10px] leading-relaxed">
+                          Conformément à la formule GRC configurée, l'atténuation par le niveau de maîtrise (M) n'est pas appliquée. Le Score Net est strictement égal au Score Brut (F × I).
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 mt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-slate-500 font-semibold uppercase">Niveau de Maîtrise / Contrôle (M)</span>
+                          <span className="font-bold font-mono text-xs text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-100 shadow-sm">{formControl}</span>
+                        </div>
+                        <select
+                          value={formControl}
+                          onChange={(e) => setFormControl(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-200 text-slate-700 text-xs rounded p-1.5"
+                        >
+                          {controlScales.map(item => (
+                            <option key={item.value} value={item.value}>
+                              Cotation {item.value} : {item.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[9px] text-slate-400 italic">
+                          {controlScales.find(f => f.value === formControl)?.description}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-purple-100 shadow-sm text-center mt-3">
+                      <div>
+                        <span className="text-[9px] text-slate-400 font-bold block uppercase leading-none">Score Brut</span>
+                        <span className="font-extrabold text-slate-700 text-lg font-mono">{formScoreBrut}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-400 font-bold block uppercase leading-none">Score Net / Résiduel</span>
+                        <span className="font-extrabold text-red-600 text-lg font-mono">{formScoreResiduel}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Workflow status picker if creating */}
