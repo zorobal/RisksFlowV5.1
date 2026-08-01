@@ -916,11 +916,6 @@ export default function RiskMappingModule({
                           >
                             <td className="py-3 px-3 font-bold text-slate-900 leading-snug max-w-xs">
                               <div className="text-sm font-extrabold text-slate-900">{risk.title}</div>
-                              {risk.causes && (
-                                <p className="text-[10.5px] text-slate-500 font-normal line-clamp-2 mt-1 leading-tight">
-                                  <span className="font-semibold text-slate-600">Cause :</span> {risk.causes}
-                                </p>
-                              )}
                             </td>
                             <td className="py-3 px-3 text-slate-900 font-semibold text-xs text-center">
                               {category?.name || risk.categoryId || 'Général'}
