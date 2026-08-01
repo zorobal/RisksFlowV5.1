@@ -857,12 +857,22 @@ export default function MatrixModule({
           
           {/* HEATMAP SCREEN */}
           <div className="lg:col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4" ref={standardMatrixRef} id="standard-matrix-container">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">
-                {matrixType === 'brut' 
-                  ? `Grille d'Évaluation de Sévérité Brute (${size}x${size})`
-                  : `Grille d'Appréciation du Risque Net (Brut vs Maîtrise)`}
-              </h3>
+            <div className="flex flex-wrap items-center justify-between border-b pb-3 gap-2">
+              <div>
+                <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">
+                  {matrixType === 'brut' 
+                    ? `Grille d'Évaluation de Sévérité Brute (${size}x${size})`
+                    : `Grille d'Appréciation du Risque Net (Brut vs Maîtrise)`}
+                </h3>
+                <p className="text-[11px] font-bold text-indigo-700 flex items-center gap-1 mt-0.5">
+                  <Building2 className="w-3.5 h-3.5" />
+                  Unité / Périmètre : {
+                    entityFilter === 'all' 
+                      ? 'Toutes les entités (Périmètre Global)' 
+                      : (tenantConfig.entities.find(e => e.id === entityFilter)?.name || entityFilter)
+                  }
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleExportPNG(standardMatrixRef, `matrice-interactive-${matrixType}.png`)}
@@ -1103,16 +1113,32 @@ export default function MatrixModule({
             {/* Header banner matching attachment */}
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
               {/* Logo / Tenant placeholder (Left top block) */}
-              <div className="bg-white px-4 py-2 rounded-lg flex items-center justify-center border border-slate-300 shrink-0 w-36 h-11">
-                <span className="text-slate-900 font-black text-xs uppercase tracking-tight text-center truncate">
-                  🏢 {tenantConfig.companyName.split(' ')[0]} GRC
-                </span>
+              <div className="bg-white px-3 py-1.5 rounded-lg flex items-center justify-center border border-slate-300 shrink-0 min-w-[9rem] max-w-[12rem] h-11">
+                {tenantConfig.logoUrl ? (
+                  <img src={tenantConfig.logoUrl} alt={tenantConfig.companyName} className="h-8 object-contain" />
+                ) : (
+                  <span className="text-slate-900 font-black text-xs uppercase tracking-tight text-center truncate">
+                    🏢 {tenantConfig.companyName}
+                  </span>
+                )}
               </div>
 
-              {/* Center Title */}
-              <h1 className="text-center font-black tracking-widest text-2xl uppercase flex-1 text-white">
-                MATRICE DES RISQUES
-              </h1>
+              {/* Center Title with Selected Entity / Unit */}
+              <div className="text-center flex-1 px-4 space-y-1">
+                <h1 className="font-black tracking-widest text-2xl uppercase text-white">
+                  MATRICE DES RISQUES
+                </h1>
+                <p className="text-xs font-bold text-amber-400 flex items-center justify-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>
+                    Unité / Périmètre : {
+                      entityFilter === 'all' 
+                        ? 'Toutes les entités (Périmètre Global)' 
+                        : (tenantConfig.entities.find(e => e.id === entityFilter)?.name || entityFilter)
+                    }
+                  </span>
+                </p>
+              </div>
 
               {/* Legends (Right top block matching tenantConfig.matrixThresholds) */}
               <div className="flex flex-col items-start gap-1 bg-[#10243C] p-2.5 rounded-lg border border-[#1e3450] text-[10px] font-bold shrink-0">
