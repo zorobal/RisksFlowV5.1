@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import html2canvas from 'html2canvas-pro';
+import jsPDF from 'jspdf';
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
@@ -85,6 +86,7 @@ export default function RiskMappingModule({
   const [majorShowScoreNet, setMajorShowScoreNet] = useState<boolean>(true);
   const majorReportRef = useRef<HTMLDivElement>(null);
   const [isExportingMajor, setIsExportingMajor] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [majorViewMode, setMajorViewMode] = useState<'table' | 'cards' | 'heatmap'>('table');
   
   // Selection / Editing States
@@ -261,6 +263,111 @@ export default function RiskMappingModule({
       }
     } finally {
       setIsExportingMajor(false);
+    }
+  };
+
+  // Export Major Risks Mapping PDF (Multi-pages if needed, matching PNG layout & styling)
+  const handleExportMajorPDF = async () => {
+    if (!majorReportRef.current) return;
+    setIsExportingPDF(true);
+    try {
+      const node = majorReportRef.current;
+
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await html2canvas(node, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
+      } catch (err) {
+        const dataUrl = await toPng(node, {
+          quality: 0.98,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          width: node.scrollWidth || 1000,
+          height: node.scrollHeight || 800
+        });
+        const img = new Image();
+        img.src = dataUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.drawImage(img, 0, 0);
+      }
+
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Landscape A4 PDF (297mm x 210mm)
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 297 mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 210 mm
+      const margin = 8; // 8mm page margins
+      const printWidth = pdfWidth - margin * 2;
+      const printHeight = pdfHeight - margin * 2;
+
+      // Height of canvas slice corresponding to one PDF page height
+      const pageCanvasHeight = (printHeight * imgWidth) / printWidth;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+      let page = 0;
+
+      while (heightLeft > 0) {
+        if (page > 0) {
+          pdf.addPage();
+        }
+
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = imgWidth;
+        const currentSliceHeight = Math.min(pageCanvasHeight, heightLeft);
+        sliceCanvas.height = currentSliceHeight;
+
+        const ctx = sliceCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          ctx.drawImage(
+            canvas,
+            0, position,
+            imgWidth, currentSliceHeight,
+            0, 0,
+            imgWidth, currentSliceHeight
+          );
+        }
+
+        const sliceDataUrl = sliceCanvas.toDataURL('image/png');
+        const slicePdfHeight = (currentSliceHeight * printWidth) / imgWidth;
+
+        pdf.addImage(
+          sliceDataUrl,
+          'PNG',
+          margin,
+          margin,
+          printWidth,
+          slicePdfHeight
+        );
+
+        heightLeft -= pageCanvasHeight;
+        position += pageCanvasHeight;
+        page++;
+      }
+
+      const fileName = `Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      onAddLog('Export Cartographie PDF', `Export PDF (${page} page${page > 1 ? 's' : ''}) de la cartographie ${majorCustomName}`);
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      alert('Impossible de générer le fichier PDF.');
+    } finally {
+      setIsExportingPDF(false);
     }
   };
 
@@ -491,14 +598,27 @@ export default function RiskMappingModule({
                     <p className="text-[11px] text-slate-500">Sélectionnez une unité et cochez la graduation & seuils de criticité issus de la Configuration.</p>
                   </div>
                 </div>
-                <button
-                  onClick={handleExportMajorMapping}
-                  disabled={isExportingMajor}
-                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
-                >
-                  <Download className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{isExportingMajor ? 'Génération...' : 'Exporter Cartographie (PNG)'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportMajorMapping}
+                    disabled={isExportingMajor || isExportingPDF}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                    title="Exporter la cartographie au format PNG"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isExportingMajor ? 'PNG...' : 'Export PNG'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleExportMajorPDF}
+                    disabled={isExportingMajor || isExportingPDF}
+                    className="px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                    title="Exporter la cartographie au format PDF multi-pages"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-rose-200" />
+                    <span>{isExportingPDF ? 'PDF...' : 'Export PDF'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -652,7 +772,30 @@ export default function RiskMappingModule({
             >
               {/* Dashboard Header */}
               <div className="border-b-2 border-slate-900 pb-4 flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
+                  {/* Entreprise Cliente Logo & Nom */}
+                  <div className="flex items-center gap-3 pb-1">
+                    {tenantConfig?.logoUrl ? (
+                      <img 
+                        src={tenantConfig.logoUrl} 
+                        alt={tenantConfig.companyName || "Logo Entreprise"} 
+                        className="h-10 max-w-[200px] object-contain rounded"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center border border-slate-800 shadow-2xs">
+                        {tenantConfig?.companyName ? tenantConfig.companyName.substring(0, 2).toUpperCase() : <Building2 className="w-5 h-5 text-amber-400" />}
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-800 block">
+                        {tenantConfig?.companyName || 'Entreprise Cliente'}
+                      </span>
+                      <span className="text-[9.5px] text-slate-500 font-semibold uppercase tracking-tight block">
+                        Gouvernance, Risques & Conformité
+                      </span>
+                    </div>
+                  </div>
+
                   <h2 className="text-lg font-black text-slate-900 tracking-tight">
                     {majorCustomName || 'Cartographie des Risques'}
                   </h2>
