@@ -272,22 +272,18 @@ export default function RiskMappingModule({
     setIsExportingPDF(true);
     try {
       const node = majorReportRef.current;
+      const width = node.scrollWidth || 1000;
+      const height = node.scrollHeight || 800;
 
       let canvas: HTMLCanvasElement;
       try {
-        canvas = await html2canvas(node, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false
-        });
-      } catch (err) {
+        // Use toPng first to capture exact DOM styling, colors, dark backgrounds, and cards identical to PNG export
         const dataUrl = await toPng(node, {
           quality: 0.98,
           pixelRatio: 2,
           backgroundColor: '#ffffff',
-          width: node.scrollWidth || 1000,
-          height: node.scrollHeight || 800
+          width,
+          height
         });
         const img = new Image();
         img.src = dataUrl;
@@ -300,6 +296,14 @@ export default function RiskMappingModule({
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (ctx) ctx.drawImage(img, 0, 0);
+      } catch (err) {
+        console.warn("PDF export via toPng failed, trying html2canvas fallback:", err);
+        canvas = await html2canvas(node, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
       }
 
       const imgWidth = canvas.width;
