@@ -859,7 +859,20 @@ export default function MatrixModule({
           <div className="lg:col-span-7 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4" ref={standardMatrixRef} id="standard-matrix-container">
             <div className="flex flex-wrap items-center justify-between border-b pb-3 gap-2">
               <div>
-                <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">
+                {/* Entreprise Cliente Logo & Nom */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  {tenantConfig.logoUrl ? (
+                    <img src={tenantConfig.logoUrl} alt={tenantConfig.companyName} className="h-6 object-contain rounded" />
+                  ) : (
+                    <div className="w-6 h-6 rounded bg-slate-900 text-amber-400 font-black text-[10px] flex items-center justify-center">
+                      🏢
+                    </div>
+                  )}
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                    {tenantConfig.companyName || 'Entreprise Cliente'}
+                  </span>
+                </div>
+                <h3 className="font-extrabold text-xs text-slate-600 uppercase tracking-wide">
                   {matrixType === 'brut' 
                     ? `Grille d'Évaluation de Sévérité Brute (${size}x${size})`
                     : `Grille d'Appréciation du Risque Net (Brut vs Maîtrise)`}
@@ -1113,14 +1126,22 @@ export default function MatrixModule({
             {/* Header banner matching attachment */}
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
               {/* Logo / Tenant placeholder (Left top block) */}
-              <div className="bg-white px-3 py-1.5 rounded-lg flex items-center justify-center border border-slate-300 shrink-0 min-w-[9rem] max-w-[12rem] h-11">
+              <div className="bg-white px-3 py-1.5 rounded-lg flex items-center gap-2.5 border border-slate-300 shrink-0 max-w-[20rem] h-12">
                 {tenantConfig.logoUrl ? (
-                  <img src={tenantConfig.logoUrl} alt={tenantConfig.companyName} className="h-8 object-contain" />
+                  <img src={tenantConfig.logoUrl} alt={tenantConfig.companyName} className="h-8 max-w-[100px] object-contain rounded" />
                 ) : (
-                  <span className="text-slate-900 font-black text-xs uppercase tracking-tight text-center truncate">
-                    🏢 {tenantConfig.companyName}
-                  </span>
+                  <div className="w-8 h-8 rounded bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center shrink-0">
+                    🏢
+                  </div>
                 )}
+                <div className="flex flex-col justify-center overflow-hidden">
+                  <span className="text-slate-900 font-black text-xs uppercase tracking-wider truncate">
+                    {tenantConfig.companyName || 'Entreprise Cliente'}
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight truncate">
+                    Gouvernance & Risques
+                  </span>
+                </div>
               </div>
 
               {/* Center Title with Selected Entity / Unit */}
