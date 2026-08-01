@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Plus, 
   Search, 
@@ -23,12 +23,26 @@ import {
   FileSpreadsheet,
   Boxes,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Target,
+  CheckSquare,
+  Sparkles,
+  Download,
+  Layers,
+  Building2,
+  Check,
+  RotateCcw,
+  Tag,
+  Printer,
+  Flame,
+  CheckCircle2
 } from 'lucide-react';
+import { toPng } from 'html-to-image';
+import html2canvas from 'html2canvas-pro';
 import { Risk, TenantConfig, User, ActionPlan } from '../types';
 import OrgEntityTreeFilter from './OrgEntityTreeFilter';
 import { getDescendantEntityIds } from '../utils/orgUtils';
-import { getCriticalityFromThresholds, computeGRCScores } from '../utils/riskUtils';
+import { getCriticalityFromThresholds, computeGRCScores, getThresholdColorStyles } from '../utils/riskUtils';
 
 interface RiskMappingModuleProps {
   risks: Risk[];
@@ -58,10 +72,20 @@ export default function RiskMappingModule({
   onAddLog
 }: RiskMappingModuleProps) {
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'graph'>('list');
+  const [activeTab, setActiveTab] = useState<'general' | 'major_risks'>('general');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedEntity, setSelectedEntity] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+  // "Cartographie des Risques Majeurs" State
+  const [majorSelectedEntity, setMajorSelectedEntity] = useState<string>('all');
+  const [majorCustomName, setMajorCustomName] = useState<string>('Risques Majeurs');
+  const [majorShowScoreBrut, setMajorShowScoreBrut] = useState<boolean>(false);
+  const [majorShowScoreNet, setMajorShowScoreNet] = useState<boolean>(true);
+  const majorReportRef = useRef<HTMLDivElement>(null);
+  const [isExportingMajor, setIsExportingMajor] = useState(false);
+  const [majorViewMode, setMajorViewMode] = useState<'table' | 'cards' | 'heatmap'>('table');
   
   // Selection / Editing States
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null);
@@ -103,6 +127,58 @@ export default function RiskMappingModule({
   const controlScales = tenantConfig?.scales?.control || [];
   const formulaExpr = tenantConfig?.formula?.expression || '(P * I) * M';
 
+  // Initialize selected thresholds for Major Risks
+  const [majorSelectedThresholds, setMajorSelectedThresholds] = useState<string[]>(() => {
+    const thresholds = matrixThresholds || [];
+    const high = thresholds.filter(t => {
+      const lower = (t.label || '').toLowerCase();
+      return lower.includes('élevé') || lower.includes('critique') || lower.includes('majeur') || lower.includes('fort') || lower.includes('sévère') || lower.includes('catastrophique');
+    }).map(t => t.label);
+    if (high.length > 0) return high;
+    return thresholds.slice(Math.floor(thresholds.length / 2)).map(t => t.label);
+  });
+
+  // Toggle multi-choice threshold selection
+  const handleToggleMajorThreshold = (label: string) => {
+    setMajorSelectedThresholds(prev => {
+      if (prev.includes(label)) {
+        return prev.filter(l => l !== label);
+      } else {
+        return [...prev, label];
+      }
+    });
+  };
+
+  // Presets helper for quick nominations & multi-choice thresholds
+  const applyThresholdPreset = (preset: 'majeurs' | 'intermediaires' | 'mineurs' | 'tous') => {
+    const allLabels = matrixThresholds.map(t => t.label);
+    if (preset === 'tous') {
+      setMajorSelectedThresholds(allLabels);
+      setMajorCustomName('Cartographie Globale des Risques');
+    } else if (preset === 'majeurs') {
+      const high = allLabels.filter(l => {
+        const lower = l.toLowerCase();
+        return lower.includes('élevé') || lower.includes('critique') || lower.includes('majeur') || lower.includes('fort') || lower.includes('sévère') || lower.includes('catastrophique');
+      });
+      setMajorSelectedThresholds(high.length > 0 ? high : matrixThresholds.slice(Math.floor(matrixThresholds.length / 2)).map(t => t.label));
+      setMajorCustomName('Risques Majeurs');
+    } else if (preset === 'intermediaires') {
+      const mid = allLabels.filter(l => {
+        const lower = l.toLowerCase();
+        return lower.includes('modéré') || lower.includes('moyen') || lower.includes('significatif');
+      });
+      setMajorSelectedThresholds(mid.length > 0 ? mid : matrixThresholds.slice(0, Math.ceil(matrixThresholds.length / 2)).map(t => t.label));
+      setMajorCustomName('Risques Intermédiaires');
+    } else if (preset === 'mineurs') {
+      const low = allLabels.filter(l => {
+        const lower = l.toLowerCase();
+        return lower.includes('faible') || lower.includes('mineur') || lower.includes('insignifiant') || lower.includes('négligeable') || lower.includes('bas');
+      });
+      setMajorSelectedThresholds(low.length > 0 ? low : [allLabels[0]]);
+      setMajorCustomName('Risques Mineurs');
+    }
+  };
+
   const selectedEntityDescendants = selectedEntity !== 'all'
     ? getDescendantEntityIds(entities, selectedEntity)
     : [];
@@ -122,6 +198,71 @@ export default function RiskMappingModule({
     
     return matchSearch && matchCat && matchEntity && matchStatus;
   });
+
+  // Mapped Major Risks Filtering
+  const majorSelectedEntityDescendants = majorSelectedEntity !== 'all'
+    ? getDescendantEntityIds(entities, majorSelectedEntity)
+    : [];
+
+  const majorFilteredRisks = safeRisks.filter(r => {
+    if (!r) return false;
+
+    // Search query match
+    const matchSearch = !searchQuery ? true : (
+      (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (r.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Entity match
+    const matchEntity = majorSelectedEntity === 'all' || 
+                        majorSelectedEntityDescendants.includes(r.entityId) || 
+                        r.entityId === majorSelectedEntity;
+
+    // Criticality Threshold match
+    const crit = getCriticalityFromThresholds(r.scoreResiduel, matrixThresholds);
+    const matchThreshold = majorSelectedThresholds.length === 0 || majorSelectedThresholds.includes(crit.label);
+
+    return matchSearch && matchEntity && matchThreshold;
+  });
+
+  // Export Major Risks Mapping Image
+  const handleExportMajorMapping = async () => {
+    if (!majorReportRef.current) return;
+    setIsExportingMajor(true);
+    try {
+      const node = majorReportRef.current;
+      const width = node.scrollWidth || 1000;
+      const height = node.scrollHeight || 800;
+      
+      const dataUrl = await toPng(node, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        width,
+        height
+      });
+      
+      const link = document.createElement('a');
+      link.download = `Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.png`;
+      link.href = dataUrl;
+      link.click();
+      onAddLog('Export Cartographie', `Export de la cartographie ${majorCustomName}`);
+    } catch (err) {
+      console.warn("Export PNG Direct error, trying html2canvas-pro:", err);
+      try {
+        const canvas = await html2canvas(majorReportRef.current, { scale: 2, backgroundColor: '#ffffff' });
+        const link = document.createElement('a');
+        link.download = `Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (e) {
+        alert("Impossible de générer l'image de la cartographie.");
+      }
+    } finally {
+      setIsExportingMajor(false);
+    }
+  };
 
   const getCriticality = (score: number) => {
     return getCriticalityFromThresholds(score, matrixThresholds);
@@ -306,56 +447,459 @@ export default function RiskMappingModule({
       {/* LEFT AREA: Filter Sidebar & Directory List */}
       <div className="flex-1 flex flex-col p-4 md:p-6 space-y-4 overflow-y-auto max-w-full md:max-w-4xl border-r border-slate-200">
         
-        {/* Odoo Style Sub-Header: Action Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white rounded-lg shadow-sm border border-slate-200">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleOpenCreate}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Nouveau Risque
-            </button>
+        {/* TOP LEVEL NAVIGATION SWITCHER: Cartographie Générale vs Cartographie des Risques Majeurs */}
+        <div className="flex items-center space-x-1.5 bg-slate-200/80 p-1.5 rounded-xl border border-slate-300 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`px-3.5 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition cursor-pointer ${
+              activeTab === 'general'
+                ? 'bg-white text-indigo-700 shadow-sm border border-slate-200 font-extrabold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4 text-indigo-600" />
+            <span>Cartographie Générale</span>
+          </button>
 
-            {/* View Mode buttons */}
-            <div className="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-slate-500">
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition ${viewMode === 'list' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'hover:bg-slate-50'}`}
-                title="Vue Liste"
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => setViewMode('kanban')}
-                className={`p-1.5 rounded transition ${viewMode === 'kanban' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'hover:bg-slate-50'}`}
-                title="Vue Kanban"
-              >
-                <Grid3X3 className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => setViewMode('graph')}
-                className={`p-1.5 rounded transition flex items-center gap-1 text-[10px] ${viewMode === 'graph' ? 'bg-white shadow-sm text-indigo-600 font-bold' : 'hover:bg-slate-50'}`}
-                title="Graphe de Dépendances Processus Métiers"
-              >
-                <Boxes className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Graphe Processus</span>
-              </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('major_risks')}
+            className={`px-3.5 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition cursor-pointer ${
+              activeTab === 'major_risks'
+                ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-300/50 font-extrabold'
+                : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/60'
+            }`}
+          >
+            <Flame className={`w-4 h-4 ${activeTab === 'major_risks' ? 'text-amber-300 animate-pulse' : 'text-rose-500'}`} />
+            <span>Cartographie des Risques Majeurs</span>
+            <span className="ml-1 bg-white/20 text-white text-[9px] px-1.5 py-0.5 rounded font-mono font-black uppercase">
+              Sur-Mesure
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'major_risks' ? (
+          <div className="space-y-5">
+            {/* 1. CONFIGURATION PANEL FOR MAJOR RISKS */}
+            <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-rose-600" />
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900">Paramétrage & Multi-Choix des Risques Majeurs</h3>
+                    <p className="text-[11px] text-slate-500">Sélectionnez une unité et cochez la graduation & seuils de criticité issus de la Configuration.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleExportMajorMapping}
+                  disabled={isExportingMajor}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{isExportingMajor ? 'Génération...' : 'Exporter Cartographie (PNG)'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left Column: Unit & Custom Title */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block mb-1">
+                      1. Périmètre Organisationnel (Unité / Succursale)
+                    </label>
+                    <OrgEntityTreeFilter
+                      entities={entities}
+                      selectedEntityId={majorSelectedEntity}
+                      onSelectEntity={(id) => setMajorSelectedEntity(id)}
+                      label=""
+                      includeAllOption={true}
+                      allOptionLabel="Toutes les unités organisationnelles"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block mb-1">
+                      2. Nomination de la Cartographie (Définie par l'Utilisateur)
+                    </label>
+                    <div className="relative">
+                      <Tag className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-indigo-500" />
+                      <input
+                        type="text"
+                        value={majorCustomName}
+                        onChange={(e) => setMajorCustomName(e.target.value)}
+                        placeholder="Ex: Risques Majeurs, Risques Critiques, Risques Mineurs..."
+                        className="w-full bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-indigo-600 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block mb-1">
+                      3. Colonnes Optionnelles à Afficher dans la Cartographie
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white px-2.5 py-1.5 rounded-md border border-slate-200 shadow-2xs hover:bg-slate-50 select-none">
+                        <input
+                          type="checkbox"
+                          checked={majorShowScoreBrut}
+                          onChange={(e) => setMajorShowScoreBrut(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <span>Score Brut</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white px-2.5 py-1.5 rounded-md border border-slate-200 shadow-2xs hover:bg-slate-50 select-none">
+                        <input
+                          type="checkbox"
+                          checked={majorShowScoreNet}
+                          onChange={(e) => setMajorShowScoreNet(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <span>Score Net (Criticité)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Multi-Choice Thresholds & Presets */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10.5px] font-bold text-slate-500 uppercase block">
+                      4. Graduation & Seuils de Criticité (Multi-Choix)
+                    </label>
+                    <span className="text-[10px] text-indigo-600 font-semibold">
+                      {majorSelectedThresholds.length} sélectionné(s)
+                    </span>
+                  </div>
+
+                  {/* Threshold Checkboxes / Toggle Pills */}
+                  <div className="flex flex-wrap gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    {matrixThresholds.map((t) => {
+                      const isChecked = majorSelectedThresholds.includes(t.label);
+                      const styles = getThresholdColorStyles(t.label, matrixThresholds);
+                      
+                      return (
+                        <button
+                          type="button"
+                          key={t.label}
+                          onClick={() => handleToggleMajorThreshold(t.label)}
+                          className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                            isChecked 
+                              ? 'ring-2 ring-indigo-500/40 font-extrabold' 
+                              : 'opacity-50 hover:opacity-100 bg-white border-slate-300 text-slate-600'
+                          }`}
+                          style={isChecked ? { backgroundColor: styles.bg, color: styles.text, borderColor: styles.border } : {}}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border text-[9px] ${
+                            isChecked ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-300'
+                          }`}>
+                            {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                          <span>{t.label}</span>
+                          <span className="text-[9.5px] opacity-75 font-mono">({t.minScore}-{t.maxScore})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Preset Shortcuts */}
+                  <div className="pt-1">
+                    <span className="text-[10px] text-slate-400 font-bold block mb-1.5">Raccourcis de nomination :</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => applyThresholdPreset('majeurs')}
+                        className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-red-600"></span>
+                        <span>🔴 Risques Majeurs</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyThresholdPreset('intermediaires')}
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span>🟡 Risques Intermédiaires</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyThresholdPreset('mineurs')}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                        <span>🟢 Risques Mineurs</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyThresholdPreset('tous')}
+                        className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Sparkles className="w-3 h-3 text-indigo-600" />
+                        <span>⚡ Tous les Niveaux</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. MAPPED DASHBOARD & EXPORT CONTAINER */}
+            <div 
+              ref={majorReportRef}
+              className="bg-white p-6 rounded-xl border border-slate-200 shadow-md space-y-5"
+            >
+              {/* Dashboard Header */}
+              <div className="border-b-2 border-slate-900 pb-4 flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                    {majorCustomName || 'Cartographie des Risques'}
+                  </h2>
+                  <p className="text-xs text-indigo-700 font-bold flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5" />
+                    Unité / Périmètre : {
+                      majorSelectedEntity === 'all' 
+                        ? 'Toutes les Unités Organisationnelles' 
+                        : (entities.find(e => e.id === majorSelectedEntity)?.name || majorSelectedEntity)
+                    }
+                  </p>
+                </div>
+
+                {/* Active Threshold Badges */}
+                <div className="text-right space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Niveaux Sélectionnés :</span>
+                  <div className="flex flex-wrap justify-end gap-1 max-w-xs">
+                    {majorSelectedThresholds.length === 0 ? (
+                      <span className="text-rose-600 font-bold text-xs italic">Aucun niveau coché !</span>
+                    ) : (
+                      majorSelectedThresholds.map(lbl => {
+                        const styles = getThresholdColorStyles(lbl, matrixThresholds);
+                        return (
+                          <span 
+                            key={lbl} 
+                            className="px-2 py-0.5 rounded text-[10px] font-extrabold border"
+                            style={{ backgroundColor: styles.bg, color: styles.text, borderColor: styles.border }}
+                          >
+                            {lbl}
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic KPI Metrics Cards Bar by Selected Thresholds */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Total Filtered Risks Card */}
+                <div className="px-2.5 py-1.5 bg-slate-900 text-white rounded-lg border border-slate-800 space-y-0.5 text-center min-w-[90px] flex-1 shadow-2xs">
+                  <span className="text-[8.5px] text-slate-300 font-extrabold uppercase block tracking-wider">
+                    Total Risques
+                  </span>
+                  <span className="text-base font-black font-mono text-amber-400">{majorFilteredRisks.length}</span>
+                </div>
+
+                {/* Per Selected Threshold Count Cards */}
+                {majorSelectedThresholds.map((thresholdLabel) => {
+                  const count = majorFilteredRisks.filter(r => {
+                    const crit = getCriticality(r.scoreResiduel);
+                    return crit.label === thresholdLabel;
+                  }).length;
+                  const styles = getThresholdColorStyles(thresholdLabel, matrixThresholds);
+
+                  return (
+                    <div 
+                      key={thresholdLabel} 
+                      className="px-2.5 py-1.5 rounded-lg border space-y-0.5 text-center min-w-[90px] flex-1 shadow-2xs"
+                      style={{ backgroundColor: styles.bg, borderColor: styles.border }}
+                    >
+                      <span className="text-[8.5px] font-black uppercase block tracking-tight" style={{ color: styles.text }}>
+                        Risques {thresholdLabel}
+                      </span>
+                      <span className="text-base font-black font-mono" style={{ color: styles.text }}>
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Mapped Risks Viewport Table */}
+              {majorFilteredRisks.length === 0 ? (
+                <div className="bg-slate-50 p-8 rounded-xl border border-dashed border-slate-300 text-center space-y-2">
+                  <ShieldAlert className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="font-bold text-slate-600 text-xs">
+                    Aucun risque ne correspond au périmètre et à la graduation de criticité sélectionnée.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Cochez d'autres niveaux de graduation (ex: Élevé, Modéré) ou cliquez sur "⚡ Tous les Niveaux".
+                  </p>
+                  <button
+                    onClick={() => applyThresholdPreset('tous')}
+                    className="px-3 py-1 bg-indigo-600 text-white rounded font-bold text-xs hover:bg-indigo-700 transition cursor-pointer"
+                  >
+                    Afficher tous les niveaux
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-900 text-white uppercase text-[9.5px]">
+                      <tr>
+                        <th className="py-2.5 px-3 font-bold text-center">Intitulé du Risque</th>
+                        <th className="py-2.5 px-3 font-bold text-center">Catégorie</th>
+                        {majorShowScoreBrut && (
+                          <th className="py-2.5 px-3 font-bold text-center">Score Brut</th>
+                        )}
+                        {majorShowScoreNet && (
+                          <th className="py-2.5 px-3 font-bold text-center">Score Net (Criticité)</th>
+                        )}
+                        <th className="py-2.5 px-3 font-bold text-center">Plan d'Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs">
+                      {majorFilteredRisks.map((risk) => {
+                        const crit = getCriticality(risk.scoreResiduel);
+                        const brutCrit = getCriticality(risk.scoreBrut);
+                        const category = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId);
+                        const riskActions = safeActions.filter(a => a.riskId === risk.id);
+
+                        return (
+                          <tr 
+                            key={risk.id}
+                            onClick={() => handleOpenEdit(risk)}
+                            className={`hover:bg-indigo-50/40 cursor-pointer transition ${selectedRisk?.id === risk.id ? 'bg-indigo-50 font-semibold' : ''}`}
+                          >
+                            <td className="py-3 px-3 font-bold text-slate-900 leading-snug max-w-xs">
+                              <div className="text-sm font-extrabold text-slate-900">{risk.title}</div>
+                              {risk.causes && (
+                                <p className="text-[10.5px] text-slate-500 font-normal line-clamp-2 mt-1 leading-tight">
+                                  <span className="font-semibold text-slate-600">Cause :</span> {risk.causes}
+                                </p>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-slate-900 font-semibold text-xs text-center">
+                              {category?.name || risk.categoryId || 'Général'}
+                            </td>
+                            {majorShowScoreBrut && (
+                              <td className="py-3 px-3 text-center">
+                                <span 
+                                  className="inline-block px-2.5 py-1 rounded-lg text-xs font-black border shadow-2xs"
+                                  style={{ backgroundColor: brutCrit.color, color: brutCrit.textColor, borderColor: brutCrit.textColor + '40' }}
+                                >
+                                  {risk.scoreBrut}
+                                </span>
+                              </td>
+                            )}
+                            {majorShowScoreNet && (
+                              <td className="py-3 px-3 text-center">
+                                <span 
+                                  className="inline-block px-2.5 py-1 rounded-lg text-xs font-black border shadow-2xs"
+                                  style={{ backgroundColor: crit.color, color: crit.textColor, borderColor: crit.textColor + '40' }}
+                                >
+                                  {risk.scoreResiduel} ({crit.label})
+                                </span>
+                              </td>
+                            )}
+                            <td className="py-3 px-3">
+                              {riskActions.length > 0 ? (
+                                <div className="space-y-2 max-w-md">
+                                  {riskActions.map((act) => {
+                                    let statusBg = "bg-blue-50 text-blue-800 border-blue-200";
+                                    if (act.status === 'En cours') {
+                                      statusBg = "bg-amber-50 text-amber-800 border-amber-200";
+                                    } else if (act.status === 'Réalisé') {
+                                      statusBg = "bg-emerald-50 text-emerald-800 border-emerald-200";
+                                    } else if (act.status === 'Annulé') {
+                                      statusBg = "bg-rose-50 text-rose-800 border-rose-200";
+                                    }
+
+                                    return (
+                                      <div key={act.id} className="p-2 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1">
+                                        <div className="font-extrabold text-slate-900 flex items-center justify-between gap-2">
+                                          <span className="text-indigo-950 font-bold">📌 {act.title}</span>
+                                          <span className={`text-[9.5px] px-2 py-0.5 rounded font-extrabold border ${statusBg} shrink-0`}>
+                                            {act.status || 'À planifier'}
+                                          </span>
+                                        </div>
+                                        {act.description && (
+                                          <p className="text-[10.5px] text-slate-600 leading-snug line-clamp-3 pt-0.5">
+                                            {act.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 inline-block">
+                                  ⚠️ Aucun plan d'action renseigné
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
+        ) : (
+          /* STANDARD CARTOGRAPHIE GÉNÉRALE VIEW */
+          <>
+            {/* Odoo Style Sub-Header: Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleOpenCreate}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nouveau Risque
+                </button>
 
-          {/* Quick text search */}
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-            <input 
-              type="text"
-              placeholder="Rechercher par Titre, Code, ..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 w-full"
-            />
-          </div>
-        </div>
+                {/* View Mode buttons */}
+                <div className="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-slate-500">
+                  <button 
+                    onClick={() => setViewMode('list')}
+                    className={`p-1.5 rounded transition ${viewMode === 'list' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'hover:bg-slate-50'}`}
+                    title="Vue Liste"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('kanban')}
+                    className={`p-1.5 rounded transition ${viewMode === 'kanban' ? 'bg-white shadow-sm text-indigo-600 font-semibold' : 'hover:bg-slate-50'}`}
+                    title="Vue Kanban"
+                  >
+                    <Grid3X3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('graph')}
+                    className={`p-1.5 rounded transition flex items-center gap-1 text-[10px] ${viewMode === 'graph' ? 'bg-white shadow-sm text-indigo-600 font-bold' : 'hover:bg-slate-50'}`}
+                    title="Graphe de Dépendances Processus Métiers"
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Graphe Processus</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick text search */}
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Rechercher par Titre, Code, ..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-500 w-full"
+                />
+              </div>
+            </div>
 
         {/* Modular filters ribbon */}
         <div className={`grid grid-cols-1 ${(isSuperAdminMode || tenantConfig?.showWorkflowFilter) ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3 p-3 bg-white rounded-lg border border-slate-200 shadow-sm`}>
@@ -663,6 +1207,8 @@ export default function RiskMappingModule({
               ))}
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
 
