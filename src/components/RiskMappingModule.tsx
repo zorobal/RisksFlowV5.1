@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   Plus, 
   Search, 
@@ -84,6 +85,7 @@ export default function RiskMappingModule({
   const [majorCustomName, setMajorCustomName] = useState<string>('Risques Majeurs');
   const [majorShowScoreBrut, setMajorShowScoreBrut] = useState<boolean>(false);
   const [majorShowScoreNet, setMajorShowScoreNet] = useState<boolean>(true);
+  const [majorShowActionTitle, setMajorShowActionTitle] = useState<boolean>(true);
   const majorReportRef = useRef<HTMLDivElement>(null);
   const [isExportingMajor, setIsExportingMajor] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -266,107 +268,234 @@ export default function RiskMappingModule({
     }
   };
 
-  // Export Major Risks Mapping PDF (Multi-pages if needed, matching PNG layout & styling)
+  // Export Major Risks to Excel (.xlsx)
+  const handleExportExcel = () => {
+    try {
+      const dataToExport = majorFilteredRisks.map((risk) => {
+        const crit = getCriticality(risk.scoreResiduel);
+        const brutCrit = getCriticality(risk.scoreBrut);
+        const category = categories.find(c => c.id === risk.categoryId || c.name === risk.categoryId);
+        const riskActions = safeActions.filter(a => a.riskId === risk.id);
+
+        const actionsText = riskActions.length > 0 
+          ? riskActions.map(a => {
+              const titlePart = majorShowActionTitle ? `${a.title} : ` : '';
+              const descPart = a.description || '';
+              const statusPart = a.status ? ` [Statut: ${a.status}]` : '';
+              return `${titlePart}${descPart}${statusPart}`;
+            }).join(' | ')
+          : "Aucun plan d'action";
+
+        const row: Record<string, any> = {
+          'Intitulé du Risque': risk.title,
+          'Catégorie': category?.name || risk.categoryId || 'Général',
+        };
+
+        if (majorShowScoreBrut) {
+          row['Score Brut'] = risk.scoreBrut;
+          row['Criticité Brute'] = brutCrit.label;
+        }
+
+        if (majorShowScoreNet) {
+          row['Score Net (Residual)'] = risk.scoreResiduel;
+          row['Criticité Nette'] = crit.label;
+        }
+
+        row["Plan d'Actions"] = actionsText;
+
+        const entityObj = entities.find(e => e.id === risk.entityId);
+        row['Périmètre / Unité'] = entityObj?.name || risk.entityId || 'Global';
+
+        return row;
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+      // Set explicit column widths for Excel
+      worksheet['!cols'] = [
+        { wch: 45 }, // Intitulé du Risque
+        { wch: 25 }, // Catégorie
+        { wch: 12 }, // Score Brut
+        { wch: 18 }, // Criticité Brute
+        { wch: 20 }, // Score Net
+        { wch: 60 }, // Plan d'Actions
+        { wch: 25 }, // Périmètre
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Risques Majeurs');
+
+      const fileName = `Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+
+      onAddLog('Export Excel', `Export Excel de la cartographie ${majorCustomName}`);
+    } catch (err) {
+      console.error("Erreur lors de l'export Excel:", err);
+      alert("Impossible de générer le fichier Excel.");
+    }
+  };
+
+  // Export Major Risks Mapping PDF (With non-chopped table rows & repeating header on every page)
   const handleExportMajorPDF = async () => {
     if (!majorReportRef.current) return;
     setIsExportingPDF(true);
     try {
       const node = majorReportRef.current;
-      const width = node.scrollWidth || 1000;
-      const height = node.scrollHeight || 800;
+      const reportTable = node.querySelector('table');
+      const tableRows = reportTable ? Array.from(reportTable.querySelectorAll('tbody tr')) as HTMLElement[] : [];
 
-      let canvas: HTMLCanvasElement;
-      try {
-        // Use toPng first to capture exact DOM styling, colors, dark backgrounds, and cards identical to PNG export
-        const dataUrl = await toPng(node, {
-          quality: 0.98,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          width,
-          height
-        });
-        const img = new Image();
-        img.src = dataUrl;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
-        canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.drawImage(img, 0, 0);
-      } catch (err) {
-        console.warn("PDF export via toPng failed, trying html2canvas fallback:", err);
-        canvas = await html2canvas(node, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false
-        });
+      // Fallback to single page screenshot if no table or rows found
+      if (!reportTable || tableRows.length === 0) {
+        const dataUrl = await toPng(node, { quality: 0.98, pixelRatio: 2, backgroundColor: '#ffffff' });
+        const pdf = new jsPDF('landscape', 'mm', 'a4');
+        pdf.addImage(dataUrl, 'PNG', 8, 8, 281, 0);
+        pdf.save(`Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        return;
       }
-
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
 
       // Landscape A4 PDF (297mm x 210mm)
       const pdf = new jsPDF('landscape', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth(); // 297 mm
-      const pdfHeight = pdf.internal.pageSize.getHeight(); // 210 mm
-      const margin = 8; // 8mm page margins
-      const printWidth = pdfWidth - margin * 2;
-      const printHeight = pdfHeight - margin * 2;
+      const margin = 8;
+      const printWidth = 281; // 297 - 16
+      const printHeight = 194; // 210 - 16
 
-      // Height of canvas slice corresponding to one PDF page height
-      const pageCanvasHeight = (printHeight * imgWidth) / printWidth;
+      const nodeWidth = node.scrollWidth || 1100;
+      // Max height allowed per page in canvas pixels for exact A4 aspect ratio
+      const maxCanvasPageHeight = Math.floor((printHeight * nodeWidth) / printWidth);
 
-      let heightLeft = imgHeight;
-      let position = 0;
-      let page = 0;
+      const tableHeader = reportTable.querySelector('thead') as HTMLElement | null;
+      const topHeaderElem = node.querySelector('.report-top-header') as HTMLElement | null;
+      const titleUnitElem = node.querySelector('.report-title-unit') as HTMLElement | null;
+      const kpiElem = node.querySelector('.report-kpi-bar') as HTMLElement | null;
 
-      while (heightLeft > 0) {
-        if (page > 0) {
+      // Temporary off-screen container for dynamic DOM measurement & canvas rendering
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0px';
+      tempContainer.style.width = `${nodeWidth}px`;
+      tempContainer.style.backgroundColor = '#ffffff';
+      document.body.appendChild(tempContainer);
+
+      const pageBuckets: HTMLElement[][] = [];
+      let currentBucketRows: HTMLElement[] = [];
+      let currentPageIdx = 0;
+
+      // Helper to build a page node structure
+      const createPageNode = (pageIndex: number) => {
+        const pageNode = document.createElement('div');
+        pageNode.className = "bg-white p-5 rounded-xl border border-slate-200 space-y-3";
+        pageNode.style.width = `${nodeWidth}px`;
+
+        if (pageIndex === 0) {
+          if (topHeaderElem) pageNode.appendChild(topHeaderElem.cloneNode(true));
+          if (titleUnitElem) pageNode.appendChild(titleUnitElem.cloneNode(true));
+          if (kpiElem) pageNode.appendChild(kpiElem.cloneNode(true));
+        } else {
+          const compactHeader = document.createElement('div');
+          compactHeader.className = "border-b-2 border-slate-900 pb-2.5 flex items-center justify-between";
+          compactHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0f172a;">${tenantConfig?.companyName || 'Entreprise Cliente'}</span>
+              <span style="font-size: 11px; font-weight: 700; color: #4338ca;">— ${majorCustomName || 'Cartographie des Risques'} (Suite)</span>
+            </div>
+            <span style="font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: #64748b;">Page ${pageIndex + 1}</span>
+          `;
+          pageNode.appendChild(compactHeader);
+        }
+
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = "overflow-x-auto rounded-lg border border-slate-200";
+
+        const newTable = document.createElement('table');
+        newTable.className = "w-full text-left border-collapse";
+
+        if (tableHeader) {
+          newTable.appendChild(tableHeader.cloneNode(true));
+        }
+
+        const newTbody = document.createElement('tbody');
+        newTbody.className = "divide-y divide-slate-200 text-xs";
+
+        newTable.appendChild(newTbody);
+        tableWrapper.appendChild(newTable);
+        pageNode.appendChild(tableWrapper);
+
+        return { pageNode, newTbody };
+      };
+
+      let { pageNode: activePageNode, newTbody: activeTbody } = createPageNode(currentPageIdx);
+      tempContainer.appendChild(activePageNode);
+
+      for (let i = 0; i < tableRows.length; i++) {
+        const row = tableRows[i];
+        const clonedRow = row.cloneNode(true) as HTMLElement;
+        activeTbody.appendChild(clonedRow);
+
+        // Check if adding this row caused activePageNode to exceed maxCanvasPageHeight
+        const currentHeight = activePageNode.offsetHeight;
+
+        if (currentHeight > (maxCanvasPageHeight - 15) && currentBucketRows.length > 0) {
+          // Remove row that overflowed
+          activeTbody.removeChild(clonedRow);
+
+          // Save current bucket
+          pageBuckets.push(currentBucketRows);
+          currentBucketRows = [];
+
+          // Start a new page node
+          currentPageIdx++;
+          tempContainer.removeChild(activePageNode);
+
+          const newPage = createPageNode(currentPageIdx);
+          activePageNode = newPage.pageNode;
+          activeTbody = newPage.newTbody;
+          tempContainer.appendChild(activePageNode);
+
+          // Re-append row to the new page
+          const reClonedRow = row.cloneNode(true) as HTMLElement;
+          activeTbody.appendChild(reClonedRow);
+          currentBucketRows.push(row);
+        } else {
+          currentBucketRows.push(row);
+        }
+      }
+
+      if (currentBucketRows.length > 0) {
+        pageBuckets.push(currentBucketRows);
+      }
+
+      // Render each page bucket to canvas and add to PDF
+      for (let pageIdx = 0; pageIdx < pageBuckets.length; pageIdx++) {
+        if (pageIdx > 0) {
           pdf.addPage();
         }
 
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = imgWidth;
-        const currentSliceHeight = Math.min(pageCanvasHeight, heightLeft);
-        sliceCanvas.height = currentSliceHeight;
+        tempContainer.innerHTML = '';
+        const { pageNode } = createPageNode(pageIdx);
+        const tbody = pageNode.querySelector('tbody')!;
 
-        const ctx = sliceCanvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-          ctx.drawImage(
-            canvas,
-            0, position,
-            imgWidth, currentSliceHeight,
-            0, 0,
-            imgWidth, currentSliceHeight
-          );
-        }
+        pageBuckets[pageIdx].forEach((r) => {
+          tbody.appendChild(r.cloneNode(true));
+        });
 
-        const sliceDataUrl = sliceCanvas.toDataURL('image/png');
-        const slicePdfHeight = (currentSliceHeight * printWidth) / imgWidth;
+        tempContainer.appendChild(pageNode);
 
-        pdf.addImage(
-          sliceDataUrl,
-          'PNG',
-          margin,
-          margin,
-          printWidth,
-          slicePdfHeight
-        );
+        const pageDataUrl = await toPng(pageNode, {
+          quality: 0.98,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          width: nodeWidth,
+        });
 
-        heightLeft -= pageCanvasHeight;
-        position += pageCanvasHeight;
-        page++;
+        pdf.addImage(pageDataUrl, 'PNG', margin, margin, printWidth, 0);
       }
+
+      document.body.removeChild(tempContainer);
 
       const fileName = `Cartographie_${(majorCustomName || 'Risques').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(fileName);
-      onAddLog('Export Cartographie PDF', `Export PDF (${page} page${page > 1 ? 's' : ''}) de la cartographie ${majorCustomName}`);
+      onAddLog('Export Cartographie PDF', `Export PDF (${pageBuckets.length} page${pageBuckets.length > 1 ? 's' : ''}) de la cartographie ${majorCustomName}`);
     } catch (error) {
       console.error('Erreur export PDF:', error);
       alert('Impossible de générer le fichier PDF.');
@@ -622,6 +751,16 @@ export default function RiskMappingModule({
                     <FileText className="w-3.5 h-3.5 text-rose-200" />
                     <span>{isExportingPDF ? 'PDF...' : 'Export PDF'}</span>
                   </button>
+
+                  <button
+                    onClick={handleExportExcel}
+                    disabled={isExportingMajor || isExportingPDF}
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer disabled:opacity-50"
+                    title="Exporter la cartographie au format Microsoft Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Export Excel</span>
+                  </button>
                 </div>
               </div>
 
@@ -681,6 +820,16 @@ export default function RiskMappingModule({
                           className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
                         />
                         <span>Score Net (Criticité)</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white px-2.5 py-1.5 rounded-md border border-slate-200 shadow-2xs hover:bg-slate-50 select-none">
+                        <input
+                          type="checkbox"
+                          checked={majorShowActionTitle}
+                          onChange={(e) => setMajorShowActionTitle(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <span>Intitulé Plan d'Action</span>
                       </label>
                     </div>
                   </div>
@@ -772,60 +921,46 @@ export default function RiskMappingModule({
             {/* 2. MAPPED DASHBOARD & EXPORT CONTAINER */}
             <div 
               ref={majorReportRef}
-              className="bg-white p-6 rounded-xl border border-slate-200 shadow-md space-y-5"
+              className="bg-white p-5 rounded-xl border border-slate-200 shadow-md space-y-3.5"
             >
-              {/* Dashboard Header */}
-              <div className="border-b-2 border-slate-900 pb-4 flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1.5">
-                  {/* Entreprise Cliente Logo & Nom */}
-                  <div className="flex items-center gap-3 pb-1">
-                    {tenantConfig?.logoUrl ? (
-                      <img 
-                        src={tenantConfig.logoUrl} 
-                        alt={tenantConfig.companyName || "Logo Entreprise"} 
-                        className="h-10 max-w-[200px] object-contain rounded"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-lg bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center border border-slate-800 shadow-2xs">
-                        {tenantConfig?.companyName ? tenantConfig.companyName.substring(0, 2).toUpperCase() : <Building2 className="w-5 h-5 text-amber-400" />}
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-800 block">
-                        {tenantConfig?.companyName || 'Entreprise Cliente'}
-                      </span>
-                      <span className="text-[9.5px] text-slate-500 font-semibold uppercase tracking-tight block">
-                        Gouvernance, Risques & Conformité
-                      </span>
+              {/* Dashboard Top Header (Company Name & Selected Levels at Top Right) */}
+              <div className="report-top-header border-b-2 border-slate-900 pb-3 flex flex-wrap items-center justify-between gap-3">
+                {/* Left: Entreprise Cliente Logo & Nom */}
+                <div className="flex items-center gap-3">
+                  {tenantConfig?.logoUrl ? (
+                    <img 
+                      src={tenantConfig.logoUrl} 
+                      alt={tenantConfig.companyName || "Logo Entreprise"} 
+                      className="h-8 max-w-[160px] object-contain rounded"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 font-black text-xs flex items-center justify-center border border-slate-800 shadow-2xs">
+                      {tenantConfig?.companyName ? tenantConfig.companyName.substring(0, 2).toUpperCase() : <Building2 className="w-4 h-4 text-amber-400" />}
                     </div>
+                  )}
+                  <div>
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-900 block">
+                      {tenantConfig?.companyName || 'Entreprise Cliente'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-semibold uppercase tracking-tight block">
+                      Gouvernance, Risques & Conformité
+                    </span>
                   </div>
-
-                  <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                    {majorCustomName || 'Cartographie des Risques'}
-                  </h2>
-                  <p className="text-xs text-indigo-700 font-bold flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5" />
-                    Unité / Périmètre : {
-                      majorSelectedEntity === 'all' 
-                        ? 'Toutes les Unités Organisationnelles' 
-                        : (entities.find(e => e.id === majorSelectedEntity)?.name || majorSelectedEntity)
-                    }
-                  </p>
                 </div>
 
-                {/* Active Threshold Badges */}
-                <div className="text-right space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Niveaux Sélectionnés :</span>
-                  <div className="flex flex-wrap justify-end gap-1 max-w-xs">
+                {/* Right: Active Threshold Badges right at the top right */}
+                <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                  <span className="text-[9.5px] font-extrabold text-slate-600 uppercase shrink-0">Niveaux Sélectionnés :</span>
+                  <div className="flex flex-wrap items-center gap-1">
                     {majorSelectedThresholds.length === 0 ? (
-                      <span className="text-rose-600 font-bold text-xs italic">Aucun niveau coché !</span>
+                      <span className="text-rose-600 font-bold text-xs italic">Aucun niveau coché</span>
                     ) : (
                       majorSelectedThresholds.map(lbl => {
                         const styles = getThresholdColorStyles(lbl, matrixThresholds);
                         return (
                           <span 
                             key={lbl} 
-                            className="px-2 py-0.5 rounded text-[10px] font-extrabold border"
+                            className="px-2 py-0.5 rounded text-[9px] font-extrabold border"
                             style={{ backgroundColor: styles.bg, color: styles.text, borderColor: styles.border }}
                           >
                             {lbl}
@@ -837,14 +972,29 @@ export default function RiskMappingModule({
                 </div>
               </div>
 
-              {/* Dynamic KPI Metrics Cards Bar by Selected Thresholds */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Title & Perimeter/Entity Bar */}
+              <div className="report-title-unit flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                  {majorCustomName || 'Cartographie des Risques'}
+                </h2>
+                <p className="text-xs text-indigo-700 font-bold flex items-center gap-1.5 bg-indigo-50/80 px-2.5 py-1 rounded-md border border-indigo-100">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Périmètre : {
+                    majorSelectedEntity === 'all' 
+                      ? 'Toutes les Unités Organisationnelles' 
+                      : (entities.find(e => e.id === majorSelectedEntity)?.name || majorSelectedEntity)
+                  }</span>
+                </p>
+              </div>
+
+              {/* Dynamic KPI Metrics Bar (Considerably reduced in size) */}
+              <div className="report-kpi-bar flex flex-wrap items-center gap-1.5">
                 {/* Total Filtered Risks Card */}
-                <div className="px-2.5 py-1.5 bg-slate-900 text-white rounded-lg border border-slate-800 space-y-0.5 text-center min-w-[90px] flex-1 shadow-2xs">
-                  <span className="text-[8.5px] text-slate-300 font-extrabold uppercase block tracking-wider">
+                <div className="px-2 py-1 bg-slate-900 text-white rounded-md border border-slate-800 flex items-center justify-between gap-2 min-w-[110px] flex-1 shadow-2xs">
+                  <span className="text-[8px] text-slate-300 font-extrabold uppercase tracking-wider">
                     Total Risques
                   </span>
-                  <span className="text-base font-black font-mono text-amber-400">{majorFilteredRisks.length}</span>
+                  <span className="text-xs font-black font-mono text-amber-400 bg-slate-800 px-1.5 py-0.5 rounded">{majorFilteredRisks.length}</span>
                 </div>
 
                 {/* Per Selected Threshold Count Cards */}
@@ -858,13 +1008,13 @@ export default function RiskMappingModule({
                   return (
                     <div 
                       key={thresholdLabel} 
-                      className="px-2.5 py-1.5 rounded-lg border space-y-0.5 text-center min-w-[90px] flex-1 shadow-2xs"
+                      className="px-2 py-1 rounded-md border flex items-center justify-between gap-2 min-w-[110px] flex-1 shadow-2xs"
                       style={{ backgroundColor: styles.bg, borderColor: styles.border }}
                     >
-                      <span className="text-[8.5px] font-black uppercase block tracking-tight" style={{ color: styles.text }}>
-                        Risques {thresholdLabel}
+                      <span className="text-[8px] font-black uppercase tracking-tight" style={{ color: styles.text }}>
+                        {thresholdLabel}
                       </span>
-                      <span className="text-base font-black font-mono" style={{ color: styles.text }}>
+                      <span className="text-xs font-black font-mono px-1.5 py-0.5 rounded bg-white/80" style={{ color: styles.text }}>
                         {count}
                       </span>
                     </div>
@@ -958,15 +1108,17 @@ export default function RiskMappingModule({
                                     }
 
                                     return (
-                                      <div key={act.id} className="p-2 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1">
-                                        <div className="font-extrabold text-slate-900 flex items-center justify-between gap-2">
-                                          <span className="text-indigo-950 font-bold">📌 {act.title}</span>
-                                          <span className={`text-[9.5px] px-2 py-0.5 rounded font-extrabold border ${statusBg} shrink-0`}>
+                                      <div key={act.id} className="py-1 px-1.5 bg-white text-xs space-y-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          {majorShowActionTitle && (
+                                            <span className="text-indigo-950 font-extrabold text-xs">📌 {act.title}</span>
+                                          )}
+                                          <span className={`text-[9.5px] px-2 py-0.5 rounded font-extrabold border ${statusBg} ${!majorShowActionTitle ? 'ml-auto' : ''} shrink-0`}>
                                             {act.status || 'À planifier'}
                                           </span>
                                         </div>
                                         {act.description && (
-                                          <p className="text-[10.5px] text-slate-600 leading-snug line-clamp-3 pt-0.5">
+                                          <p className="text-xs text-slate-800 leading-relaxed font-normal pt-0.5">
                                             {act.description}
                                           </p>
                                         )}
@@ -975,7 +1127,7 @@ export default function RiskMappingModule({
                                   })}
                                 </div>
                               ) : (
-                                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 inline-block">
+                                <span className="text-[10px] text-amber-700 font-bold bg-white px-2 py-1 inline-block">
                                   ⚠️ Aucun plan d'action renseigné
                                 </span>
                               )}
