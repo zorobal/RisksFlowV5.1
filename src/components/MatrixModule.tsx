@@ -31,7 +31,11 @@ import {
   X,
   Save,
   AlertTriangle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Columns,
+  CheckSquare,
+  Square,
+  SlidersHorizontal
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
@@ -47,6 +51,29 @@ interface MatrixModuleProps {
   actions?: ActionPlan[]; // Optional actions to bind and compute dynamic trend
   onUpdateRisk?: (risk: Risk) => void;
 }
+
+interface ColumnConfig {
+  key: string;
+  label: string;
+}
+
+const ALL_REGISTER_COLUMNS: ColumnConfig[] = [
+  { key: 'code', label: 'Code ID' },
+  { key: 'category', label: 'Nature (Catégorie)' },
+  { key: 'entity', label: 'Périmètre / Entité' },
+  { key: 'title', label: 'Intitulé du Risque' },
+  { key: 'description', label: 'Description Détaillée' },
+  { key: 'causes', label: 'Causes du Risque' },
+  { key: 'consequences', label: 'Conséquences du Risque' },
+  { key: 'prob', label: 'Probabilité (P)' },
+  { key: 'impact', label: 'Gravité (I)' },
+  { key: 'scoreBrut', label: 'Score Brut' },
+  { key: 'control', label: 'Coeff. Maîtrise' },
+  { key: 'scoreNet', label: 'Score Net' },
+  { key: 'trend', label: 'Tendance' },
+  { key: 'actionPlan', label: "Plan d'Actions" },
+  { key: 'createdBy', label: 'Responsable' },
+];
 
 export default function MatrixModule({
   risks,
@@ -65,6 +92,64 @@ export default function MatrixModule({
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Column Selection State
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(
+    ALL_REGISTER_COLUMNS.map(c => c.key)
+  );
+  const [showColumnSelector, setShowColumnSelector] = useState<boolean>(false);
+  const [showActionTitle, setShowActionTitle] = useState<boolean>(true);
+
+  // Risk Threshold / Level Multi-Selection State
+  const [selectedThresholds, setSelectedThresholds] = useState<string[]>(() => 
+    (tenantConfig.matrixThresholds || []).map(t => t.label)
+  );
+
+  // Sync selectedThresholds if tenantConfig thresholds change
+  React.useEffect(() => {
+    if (tenantConfig.matrixThresholds && tenantConfig.matrixThresholds.length > 0) {
+      const currentLabels = tenantConfig.matrixThresholds.map(t => t.label);
+      if (selectedThresholds.length === 0) {
+        setSelectedThresholds(currentLabels);
+      }
+    }
+  }, [tenantConfig.matrixThresholds]);
+
+  const isColVisible = (key: string) => visibleColumns.includes(key);
+
+  const toggleColumn = (key: string) => {
+    setVisibleColumns(prev => 
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const toggleAllColumns = (selectAll: boolean) => {
+    if (selectAll) {
+      setVisibleColumns(ALL_REGISTER_COLUMNS.map(c => c.key));
+    } else {
+      setVisibleColumns(['code', 'title']);
+    }
+  };
+
+  const toggleThreshold = (label: string) => {
+    setSelectedThresholds(prev => {
+      if (prev.includes(label)) {
+        return prev.filter(l => l !== label);
+      } else {
+        return [...prev, label];
+      }
+    });
+    setSelectedCell(null);
+  };
+
+  const toggleAllThresholds = (selectAll: boolean) => {
+    if (selectAll) {
+      setSelectedThresholds((tenantConfig.matrixThresholds || []).map(t => t.label));
+    } else {
+      setSelectedThresholds([]);
+    }
+    setSelectedCell(null);
+  };
 
   // Edit Risk Modal State
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
@@ -105,6 +190,10 @@ export default function MatrixModule({
     ? getDescendantEntityIds(tenantConfig.entities, entityFilter)
     : [];
 
+  const getCriticality = (score: number) => {
+    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
+  };
+
   // Filter risk base list
   const filteredRisks = risks.filter(r => {
     const matchEntity = entityFilter === 'all' || selectedEntityDescendants.includes(r.entityId);
@@ -113,12 +202,14 @@ export default function MatrixModule({
       r.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       r.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
       r.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchEntity && matchCat && matchSearch;
-  });
 
-  const getCriticality = (score: number) => {
-    return getCriticalityFromThresholds(score, tenantConfig.matrixThresholds);
-  };
+    // Risk level threshold multi-selection check (Brut or Net score based on matrixType)
+    const scoreToTest = matrixType === 'brut' ? r.scoreBrut : r.scoreResiduel;
+    const crit = getCriticality(scoreToTest);
+    const matchThreshold = selectedThresholds.length === 0 || selectedThresholds.includes(crit.label);
+
+    return matchEntity && matchCat && matchSearch && matchThreshold;
+  });
 
   // Matrix sizes from 3 to 10
   const size = tenantConfig.matrixSize;
@@ -261,52 +352,46 @@ export default function MatrixModule({
       const critNet = getCriticality(risk.scoreResiduel);
       const categoryName = (tenantConfig.categories || []).find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase())?.name || risk.categoryId || 'Inconnu';
       const entityName = tenantConfig.entities.find(e => e.id === risk.entityId)?.name || risk.entityId || 'Global';
+      const riskActions = actions.filter(a => a.riskId === risk.id);
 
-      return {
-        'Code Risque': risk.id,
-        'Entité / Périmètre': entityName,
-        'Nature / Catégorie': categoryName,
-        'Intitulé du Risque': risk.title,
-        'Description Détaillée': risk.description || '',
-        'Causes du Risque': risk.causes || '',
-        'Conséquences du Risque': getRiskConsequences(risk) || '',
-        'Probabilité (F)': risk.frequencyValue,
-        'Impact / Gravité (I)': risk.impactValue,
-        'Score Brut': risk.scoreBrut,
-        'Niveau Brut': critBrut.label,
-        'Coeff. Maîtrise (M)': risk.controlValue,
-        'Score Net (Résiduel)': risk.scoreResiduel,
-        'Niveau Net': critNet.label,
-        'Tendance': trend.label,
-        'Statut Workflow': risk.statusId || 'Identifié',
-        'Responsable / Auteur': risk.createdBy || 'Responsable GRC',
-        'Date Enregistrement': risk.createdAt ? new Date(risk.createdAt).toLocaleDateString('fr-FR') : ''
-      };
+      const row: Record<string, any> = {};
+
+      if (isColVisible('code')) row['Code Risque'] = risk.id;
+      if (isColVisible('category')) row['Nature / Catégorie'] = categoryName;
+      if (isColVisible('entity')) row['Entité / Périmètre'] = entityName;
+      if (isColVisible('title')) row['Intitulé du Risque'] = risk.title;
+      if (isColVisible('description')) row['Description Détaillée'] = risk.description || '';
+      if (isColVisible('causes')) row['Causes du Risque'] = risk.causes || '';
+      if (isColVisible('consequences')) row['Conséquences du Risque'] = getRiskConsequences(risk) || '';
+      if (isColVisible('prob')) row['Probabilité (P)'] = risk.frequencyValue;
+      if (isColVisible('impact')) row['Impact / Gravité (I)'] = risk.impactValue;
+      if (isColVisible('scoreBrut')) {
+        row['Score Brut'] = risk.scoreBrut;
+        row['Niveau Brut'] = critBrut.label;
+      }
+      if (isColVisible('control')) row['Coeff. Maîtrise (M)'] = risk.controlValue;
+      if (isColVisible('scoreNet')) {
+        row['Score Net (Résiduel)'] = risk.scoreResiduel;
+        row['Niveau Net'] = critNet.label;
+      }
+      if (isColVisible('trend')) row['Tendance'] = trend.label;
+      if (isColVisible('actionPlan')) {
+        row["Plan d'Actions"] = riskActions.length > 0
+          ? riskActions.map(a => {
+              const parts = [];
+              if (showActionTitle) parts.push(a.title);
+              if (a.description) parts.push(a.description);
+              parts.push(`[Statut: ${a.status || 'À planifier'}]`);
+              return parts.join(' - ');
+            }).join(' | ')
+          : "Aucun plan d'action";
+      }
+      if (isColVisible('createdBy')) row['Responsable / Auteur'] = risk.createdBy || 'Responsable GRC';
+
+      return row;
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
-
-    // Auto-adjust column widths
-    worksheet['!cols'] = [
-      { wch: 14 }, // Code Risque
-      { wch: 24 }, // Entité / Périmètre
-      { wch: 25 }, // Nature / Catégorie
-      { wch: 32 }, // Intitulé du Risque
-      { wch: 45 }, // Description
-      { wch: 35 }, // Causes
-      { wch: 35 }, // Conséquences
-      { wch: 14 }, // Prob
-      { wch: 18 }, // Impact
-      { wch: 12 }, // Score Brut
-      { wch: 16 }, // Niveau Brut
-      { wch: 16 }, // Coeff M
-      { wch: 18 }, // Score Net
-      { wch: 16 }, // Niveau Net
-      { wch: 14 }, // Tendance
-      { wch: 16 }, // Statut
-      { wch: 24 }, // Responsable
-      { wch: 18 }  // Date
-    ];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Registre_Général_Risques');
@@ -840,6 +925,59 @@ export default function MatrixModule({
             ))}
           </select>
         </div>
+
+        {/* Risk Thresholds / Levels Multi-Select Pills */}
+        <div className="md:col-span-12 pt-3 mt-1 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-extrabold uppercase text-slate-600 flex items-center gap-1.5 shrink-0">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+              Niveaux de Risque :
+            </span>
+
+            {tenantConfig.matrixThresholds.map((t) => {
+              const isSelected = selectedThresholds.includes(t.label);
+              const styles = getThresholdStyle(t);
+
+              return (
+                <button
+                  key={t.label}
+                  type="button"
+                  onClick={() => toggleThreshold(t.label)}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-black border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isSelected ? 'shadow-2xs ring-2 ring-slate-800' : 'opacity-40 hover:opacity-75 grayscale'
+                  }`}
+                  style={{
+                    backgroundColor: styles.bg,
+                    color: styles.text,
+                    borderColor: styles.border
+                  }}
+                >
+                  {isSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                  <span>{t.label}</span>
+                  <span className="text-[9px] font-mono opacity-80">({t.minScore}-{t.maxScore})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[10px] font-extrabold">
+            <button
+              type="button"
+              onClick={() => toggleAllThresholds(true)}
+              className="text-indigo-600 hover:text-indigo-800 hover:underline px-1 py-0.5"
+            >
+              Tous cocher
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => toggleAllThresholds(false)}
+              className="text-slate-500 hover:text-slate-700 hover:underline px-1 py-0.5"
+            >
+              Tout décocher
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Sandbox warning banner for general app usage */}
@@ -1329,7 +1467,88 @@ export default function MatrixModule({
           </div>
           
           {/* Table actions */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 relative">
+            {/* Direct visible toggle for Action Plan Titles */}
+            <label className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded font-bold text-[11px] cursor-pointer transition select-none shadow-2xs">
+              <input
+                type="checkbox"
+                checked={showActionTitle}
+                onChange={(e) => setShowActionTitle(e.target.checked)}
+                className="rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+              />
+              <span>Intitulés des Plans d'Action</span>
+            </label>
+
+            {/* Column Selector Toggle Button & Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowColumnSelector(prev => !prev)}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Choisir les colonnes à afficher et exporter"
+              >
+                <Columns className="w-3.5 h-3.5 text-indigo-600" />
+                Colonnes ({visibleColumns.length}/{ALL_REGISTER_COLUMNS.length})
+              </button>
+
+              {showColumnSelector && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-30 space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <Columns className="w-3.5 h-3.5 text-indigo-600" />
+                      Choix des colonnes
+                    </span>
+                    <button
+                      onClick={() => setShowColumnSelector(false)}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] font-bold pb-1 text-indigo-600 border-b border-slate-100">
+                    <button onClick={() => toggleAllColumns(true)} className="hover:underline cursor-pointer">Tout cocher</button>
+                    <button onClick={() => toggleAllColumns(false)} className="hover:underline text-slate-500 cursor-pointer">Tout décocher</button>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
+                    {ALL_REGISTER_COLUMNS.map(col => {
+                      const checked = isColVisible(col.key);
+                      return (
+                        <label
+                          key={col.key}
+                          className="flex items-center gap-2 p-1 hover:bg-slate-50 rounded cursor-pointer text-xs font-medium text-slate-700 select-none"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleColumn(col.key)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className={checked ? 'font-bold text-slate-900' : 'text-slate-500'}>
+                            {col.label}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* Option for Action Plan Title */}
+                  <div className="pt-2 border-t border-slate-100 mt-1">
+                    <label className="flex items-center gap-2 p-1 hover:bg-indigo-50/50 rounded cursor-pointer text-[11px] font-extrabold text-indigo-950 select-none">
+                      <input
+                        type="checkbox"
+                        checked={showActionTitle}
+                        onChange={(e) => setShowActionTitle(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>Afficher l'intitulé des plans d'action</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleExportExcel}
               className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-extrabold text-[11px] transition flex items-center gap-1.5 shadow-sm active:scale-98 cursor-pointer"
@@ -1367,25 +1586,28 @@ export default function MatrixModule({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 uppercase font-extrabold text-[9.5px] border-b border-slate-200">
-                  <th className="py-3 px-3 border-r border-slate-200 w-14 text-center">Code</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-36">Nature (Catégorie)</th>
-                  <th className="py-3 px-3 border-r border-slate-200 min-w-[140px]">Intitulé du Risque</th>
-                  <th className="py-3 px-3 border-r border-slate-200 min-w-[160px]">Description Détaillée</th>
-                  <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Causes du Risque</th>
-                  <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Conséquences du Risque</th>
-                  <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Prob (P)</th>
-                  <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Grav (I)</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Brut</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Net</th>
-                  <th className="py-3 px-2 border-r border-slate-200 w-16 text-center">Tendance</th>
-                  <th className="py-3 px-3 border-r border-slate-200 w-28">Responsable</th>
+                  {isColVisible('code') && <th className="py-3 px-3 border-r border-slate-200 w-14 text-center">Code</th>}
+                  {isColVisible('category') && <th className="py-3 px-3 border-r border-slate-200 w-36">Nature (Catégorie)</th>}
+                  {isColVisible('entity') && <th className="py-3 px-3 border-r border-slate-200 w-32">Périmètre / Entité</th>}
+                  {isColVisible('title') && <th className="py-3 px-3 border-r border-slate-200 min-w-[140px]">Intitulé du Risque</th>}
+                  {isColVisible('description') && <th className="py-3 px-3 border-r border-slate-200 min-w-[160px]">Description Détaillée</th>}
+                  {isColVisible('causes') && <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Causes du Risque</th>}
+                  {isColVisible('consequences') && <th className="py-3 px-3 border-r border-slate-200 min-w-[150px]">Conséquences du Risque</th>}
+                  {isColVisible('prob') && <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Prob (P)</th>}
+                  {isColVisible('impact') && <th className="py-3 px-2 border-r border-slate-200 w-12 text-center">Grav (I)</th>}
+                  {isColVisible('scoreBrut') && <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Brut</th>}
+                  {isColVisible('control') && <th className="py-3 px-2 border-r border-slate-200 w-16 text-center">Maîtrise</th>}
+                  {isColVisible('scoreNet') && <th className="py-3 px-3 border-r border-slate-200 w-20 text-center">Score Net</th>}
+                  {isColVisible('trend') && <th className="py-3 px-2 border-r border-slate-200 w-16 text-center">Tendance</th>}
+                  {isColVisible('actionPlan') && <th className="py-3 px-3 border-r border-slate-200 min-w-[200px]">Plan d'Actions</th>}
+                  {isColVisible('createdBy') && <th className="py-3 px-3 border-r border-slate-200 w-28">Responsable</th>}
                   <th className="py-3 px-2 text-center w-16">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150 bg-white">
                 {filteredRisks.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-slate-400">
+                    <td colSpan={visibleColumns.length + 1} className="py-12 text-center text-slate-400">
                       <ShieldAlert className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                       Aucun risque ne correspond à vos critères de recherche ou cette base client est vide.
                     </td>
@@ -1397,43 +1619,100 @@ export default function MatrixModule({
                     const critNet = getCriticality(risk.scoreResiduel);
                     const categoryName = (tenantConfig.categories || []).find(c => c.id === risk.categoryId || c.name === risk.categoryId || c.name.toLowerCase() === risk.categoryId?.toLowerCase())?.name || risk.categoryId || 'Inconnu';
                     const entityName = tenantConfig.entities.find(e => e.id === risk.entityId)?.name || risk.entityId;
+                    const riskActions = actions.filter(a => a.riskId === risk.id);
 
                     return (
                       <tr key={risk.id} className="hover:bg-slate-50/80 transition text-[11px]">
-                        <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-black text-slate-900 text-center">{risk.id}</td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 font-semibold leading-tight">
-                          <p className="font-extrabold text-slate-800">{categoryName}</p>
-                          <p className="text-[8px] text-slate-400 mt-0.5 truncate">{entityName}</p>
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 font-extrabold text-slate-900 leading-tight">
-                          {risk.title}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-slate-700 text-[10px] leading-relaxed">
-                          {risk.description || <span className="text-slate-300 italic">Non renseignée</span>}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-amber-900 text-[10px] leading-relaxed">
-                          {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-rose-900 text-[10px] leading-relaxed">
-                          {getRiskConsequences(risk) || <span className="text-slate-300 italic">Non renseignées</span>}
-                        </td>
-                        <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.frequencyValue}</td>
-                        <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.impactValue}</td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critBrut.textColor }}>
-                          {risk.scoreBrut}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critNet.textColor }}>
-                          {risk.scoreResiduel}
-                        </td>
-                        <td className="py-2.5 px-2 border-r border-slate-200 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[8.5px] font-extrabold flex items-center gap-1 justify-center ${trend.color}`}>
-                            {trend.icon}
-                            {trend.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-slate-200 font-semibold text-slate-700 truncate max-w-[120px]">
-                          {risk.createdBy || 'Responsable GRC'}
-                        </td>
+                        {isColVisible('code') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-black text-slate-900 text-center">{risk.id}</td>
+                        )}
+                        {isColVisible('category') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 font-semibold leading-tight">
+                            <p className="font-extrabold text-slate-800">{categoryName}</p>
+                          </td>
+                        )}
+                        {isColVisible('entity') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 font-medium text-[10px]">
+                            {entityName}
+                          </td>
+                        )}
+                        {isColVisible('title') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-extrabold text-slate-900 leading-tight">
+                            {risk.title}
+                          </td>
+                        )}
+                        {isColVisible('description') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-700 text-[10px] leading-relaxed">
+                            {risk.description || <span className="text-slate-300 italic">Non renseignée</span>}
+                          </td>
+                        )}
+                        {isColVisible('causes') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-amber-900 text-[10px] leading-relaxed">
+                            {risk.causes || <span className="text-slate-300 italic">Non renseignées</span>}
+                          </td>
+                        )}
+                        {isColVisible('consequences') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-rose-900 text-[10px] leading-relaxed">
+                            {getRiskConsequences(risk) || <span className="text-slate-300 italic">Non renseignées</span>}
+                          </td>
+                        )}
+                        {isColVisible('prob') && (
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.frequencyValue}</td>
+                        )}
+                        {isColVisible('impact') && (
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.impactValue}</td>
+                        )}
+                        {isColVisible('scoreBrut') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critBrut.textColor }}>
+                            {risk.scoreBrut}
+                          </td>
+                        )}
+                        {isColVisible('control') && (
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-800">{risk.controlValue}</td>
+                        )}
+                        {isColVisible('scoreNet') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-center font-black" style={{ color: critNet.textColor }}>
+                            {risk.scoreResiduel}
+                          </td>
+                        )}
+                        {isColVisible('trend') && (
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[8.5px] font-extrabold flex items-center gap-1 justify-center ${trend.color}`}>
+                              {trend.icon}
+                              {trend.label}
+                            </span>
+                          </td>
+                        )}
+                        {isColVisible('actionPlan') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-xs bg-white">
+                            {riskActions.length > 0 ? (
+                              <div className="space-y-2">
+                                {riskActions.map(act => (
+                                  <div key={act.id} className="bg-white py-1 border-b border-slate-100 last:border-0 last:pb-0 text-xs space-y-0.5">
+                                    {showActionTitle && (
+                                      <span className="font-extrabold text-indigo-950 block text-xs">📌 {act.title}</span>
+                                    )}
+                                    {act.description ? (
+                                      <p className="text-xs text-slate-800 font-normal leading-relaxed">{act.description}</p>
+                                    ) : (
+                                      !showActionTitle && <span className="text-xs text-slate-700 font-normal">{act.title}</span>
+                                    )}
+                                    <span className="inline-block text-[9.5px] font-bold text-slate-500 mt-0.5">
+                                      Statut: <span className="text-slate-700 font-extrabold">{act.status || 'À planifier'}</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">Aucun plan rattaché</span>
+                            )}
+                          </td>
+                        )}
+                        {isColVisible('createdBy') && (
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-semibold text-slate-700 truncate max-w-[120px]">
+                            {risk.createdBy || 'Responsable GRC'}
+                          </td>
+                        )}
                         <td className="py-2.5 px-2 text-center">
                           {onUpdateRisk && (
                             <button
